@@ -1,4 +1,7 @@
-#include <iostream>
+#include <string.h>
+#include <assert.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <complex>
 
 using namespace std;
@@ -42,31 +45,39 @@ double modsq(complex<double> x)
     return sq(x.real()) + sq(x.imag());
 }
 
-// probabilists' Hermite polynomials
-double hermite(unsigned n, double u)
+// Read a file to a string. Stop before first null character, because fuck that
+// shit.
+char *load(const char *fn)
 {
-    double h = 0;
-    double c = 1;
-    unsigned a = n;
-#ifdef HERMITE_TEST
-    cout << "H_" << n << " = ";
-#endif
-    for (;;)
-    {
-#ifdef HERMITE_TEST
-        cout << c << "u^" << a;
-#endif
-        h += c*pown(u, a);
-        if (a < 2)
+    int fd = open(fn, O_RDONLY);
+
+    assert(fd != -1);
+    off_t size = lseek(fd, 0, SEEK_END);
+    assert(size != -1);
+    assert(lseek(fd, 0, SEEK_SET) != -1);
+
+    size++;  // null terminator
+    char *buf = (char *)malloc(size);
+
+    char *p = buf;
+    for (;;) {
+        assert(p - buf < size);
+        ssize_t nread = read(fd, (char *)p, 0x10000);
+        assert(nread != -1);
+        if (nread == 0) {
+            *p = '\0';
             break;
-#ifdef HERMITE_TEST
-        cout << " + ";
-#endif
-        c *= - (double)(a*(a-1))/(n+2-a);
-        a -= 2;
+        }
+
+        char *nullbyte = (char *)memchr((char *)p, '\0', nread);
+        if (nullbyte != NULL) {
+            buf = (char *)realloc((char *)buf, nullbyte - buf);
+            break;
+        }
+
+        p += nread;
     }
-#ifdef HERMITE_TEST
-    cout << "\n";
-#endif
-    return h;
+    assert(close(fd) == 0);
+
+    return buf;
 }
