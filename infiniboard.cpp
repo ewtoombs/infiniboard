@@ -1,13 +1,18 @@
-#include <cstdio>
-#include <cstring>
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <GL/glu.h>
 
+#include "helpers.hpp"
+
 // Screen dimension constants
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
+
+#define SCREEN_RATIO ((float)SCREEN_WIDTH / SCREEN_HEIGHT)
 
 // Starts up SDL, creates window, and initialises OpenGL
 bool init();
@@ -28,9 +33,6 @@ SDL_Window *gWindow = NULL;
 
 // OpenGL context
 SDL_GLContext gContext;
-
-// Render flag
-bool gRenderQuad = true;
 
 bool init()
 {
@@ -78,45 +80,17 @@ bool init()
 
 bool initGL()
 {
-    // Initialise Projection Matrix
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    
-    // Check for error
-    GLenum error = glGetError();
-    if (error != GL_NO_ERROR) {
-        printf("Error initializing OpenGL! %s\n", gluErrorString(error));
-        return false;
-    }
-
-    // Initialise Modelview Matrix
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    // Check for error
-    error = glGetError();
-    if (error != GL_NO_ERROR) {
-        printf("Error initializing OpenGL! %s\n", gluErrorString(error));
-        return false;
-    }
-    
-    // Initialise clear color
     glClearColor(0.f, 0.f, 0.f, 1.f);
-    
-    // Check for error
-    error = glGetError();
-    if (error != GL_NO_ERROR) {
-        printf("Error initializing OpenGL! %s\n", gluErrorString(error));
-        return false;
-    }
     return true;
 }
 
 void handleKeys(SDL_Keycode key)
 {
-    // Toggle quad
     if (key == SDLK_q) {
-        gRenderQuad = !gRenderQuad;
+        SDL_Event e;
+        e.type = SDL_QUIT;
+        e.quit.timestamp = time(NULL);
+        SDL_PushEvent(&e);
     }
 }
 
@@ -124,16 +98,6 @@ void render()
 {
     // Clear color buffer
     glClear(GL_COLOR_BUFFER_BIT);
-    
-    // Render quad
-    if (gRenderQuad) {
-        glBegin(GL_QUADS);
-            glVertex2f(-0.5f, -0.5f);
-            glVertex2f(0.5f, -0.5f);
-            glVertex2f(0.5f, 0.5f);
-            glVertex2f(-0.5f, 0.5f);
-        glEnd();
-    }
 }
 
 void close()
