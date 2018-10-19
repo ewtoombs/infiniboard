@@ -155,7 +155,7 @@ bool init_gl()
 
     // Set the colour to be used in all subsequent glClear(GL_COLOR_BUFFER_BIT)
     // commands.
-    glClearColor(0.f, 0.f, 0.f, 1.f);
+    glClearColor(0, 0, 0, 1);
 
 
     // Use our shader in all subsequent draw calls.
