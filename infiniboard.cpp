@@ -22,25 +22,30 @@ float position_data[] = {
     };
 #define N_VERTICES (sizeof(position_data)/sizeof(float) / 3)
 
-// Starts up SDL, creates window, and initialises OpenGL
+
+// Starts up SDL, creates window, and initialises the SDL- and vendor-specific
+// OpenGL state.
 bool init();
-
-// Initialises matrices and clear color
-bool initGL();
-
-// Input handler
-void handleKeys(unsigned char key);
-
+// Initialises the generic OpenGL state.
+bool init_gl();
+// Input handler.
+void handle_keys(unsigned char key);
+// Per-frame actions.
 void render();
-
-// Frees media and shuts down SDL
+// Frees media and shuts down SDL.
 void close();
 
-// The window we'll be rendering to
-SDL_Window *gWindow = NULL;
+// Compile the "type" shader named "filename" and attach it to "shader_program".
+void compile_shader(GLenum type, const char *filename, GLuint shader_program);
+// Compile the vertex shader named "vertfile" and the fragment shader named
+// "fragfile". Attach both to shader_program.
+void compile_shaders(const char *vertfile, const char *fragfile,
+        GLuint shader_program);
 
-// OpenGL context
-SDL_GLContext gContext;
+
+// The window we'll be rendering to.
+SDL_Window *g_window = NULL;
+
 
 bool init()
 {
@@ -55,18 +60,18 @@ bool init()
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 
     // Create window
-    gWindow = SDL_CreateWindow("infiniboard", SDL_WINDOWPOS_UNDEFINED,
+    g_window = SDL_CreateWindow("infiniboard", SDL_WINDOWPOS_UNDEFINED,
             SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
             SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
-    if (gWindow == NULL) {
+    if (g_window == NULL) {
         printf("Window could not be created! SDL Error: %s\n",
                 SDL_GetError());
         return false;
     }
 
     // Create context
-    gContext = SDL_GL_CreateContext(gWindow);
-    if (gContext == NULL) {
+    SDL_GLContext context = SDL_GL_CreateContext(g_window);
+    if (context == NULL) {
         printf("OpenGL context could not be created! SDL Error: %s\n",
                 SDL_GetError());
         return false;
@@ -85,76 +90,88 @@ bool init()
     }
 
     // Initialise OpenGL
-    if (!initGL()) {
+    if (!init_gl()) {
         printf("Unable to initialise OpenGL!\n");
         return false;
     }
     return true;
 }
 
-bool initGL()
+void compile_shader(GLenum type, const char *filename, GLuint shader_program)
 {
-    //---- Make the VBO ----
-    GLuint triangleVBO;
-    glGenBuffers(1, &triangleVBO);
+    GLuint shader = glCreateShader(type);
+    char *source = load(filename);
+    glShaderSource(shader, 1, &source, 0);
+    glCompileShader(shader);
+    glAttachShader(shader_program, shader);
+}
+
+void compile_shaders(const char *vertfile, const char *fragfile,
+        GLuint shader_program)
+{
+    compile_shader(GL_VERTEX_SHADER, vertfile, shader_program);
+    compile_shader(GL_FRAGMENT_SHADER, fragfile, shader_program);
+}
+
+bool init_gl()
+{
+    //---- Make the VBO and the containing vertex attribute array. ----
+    GLuint position_vbo;
+    glGenBuffers(1, &position_vbo);
 
     // Make the new VBO active.
-    glBindBuffer(GL_ARRAY_BUFFER, triangleVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
 
-    // Upload vertex data to the video device.  These are the vertices of a
-    // triangle (counter-clockwise winding).
+    // Upload the vertex data in position_data to the video device.
     glBufferData(GL_ARRAY_BUFFER, sizeof(position_data),
             position_data, GL_STATIC_DRAW);
 
-    // Specify that our coordinate data is going into attribute index 0
-    // (position_attrib), and contains three floats per vertex.
+    // Define a vertex attribute array as follows. Each element of the array is
+    // a 3-dimensional vector of GL_FLOATS. The underlying data is the
+    // currently bound buffer (position_vbo). Store this defining information
+    // in position_attrib (index 0).
     const unsigned int position_attrib = 0;
     glVertexAttribPointer(position_attrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-
-
-    // Enable attribute index 0(position_attrib) as being used
-    glEnableVertexAttribArray(position_attrib);
-
-    // Make the new VBO active. (Shouldn't I be unbinding?)
-    glBindBuffer(GL_ARRAY_BUFFER, triangleVBO);
+    // position_vbo and position_attrib are ready. Unbind the VBO.
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 
     //---- Create the shader program. ----
-    GLuint shaderProgram = glCreateProgram();
+    GLuint shader_program = glCreateProgram();
 
-    // Compile and attach the vertex shader.
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    char *source = load("shader.vert");
-    glShaderSource(vertexShader, 1, &source, 0);
-    glCompileShader(vertexShader);
-    glAttachShader(shaderProgram, vertexShader);
+    // Pass position_attrib to the "position" input of the vertex shader.  This
+    // will associate one 3-vector out of position_data with every vertex the
+    // vertex shader processes. That 3-vector gets accessed by the name
+    // "position". It could be any name or any data type. It is up to the
+    // vertex shader to figure out how to turn that data into a vertex
+    // position. In this simple example, it's just a one-to-one mapping.
+    glBindAttribLocation(shader_program, position_attrib, "position");
 
-    // Compile and attach the fragment shader.
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    source = load("shader.frag");
-    glShaderSource(fragmentShader, 1, &source, 0);
-    glCompileShader(fragmentShader);
-    glAttachShader(shaderProgram, fragmentShader);
+    compile_shaders("shader.vert", "shader.frag", shader_program);
 
-    // Bind position_data to position. "position" will represent
-    // position_data in the vertex shader source.
-    glBindAttribLocation(shaderProgram, position_attrib, "position");
-
-    glLinkProgram(shaderProgram);
+    glLinkProgram(shader_program);
 
 
     // Set the colour to be used in all subsequent glClear(GL_COLOR_BUFFER_BIT)
     // commands.
     glClearColor(0.f, 0.f, 0.f, 1.f);
 
+
     // Use our shader in all subsequent draw calls.
-    glUseProgram(shaderProgram);
+    glUseProgram(shader_program);
+
+    // Enable attribute index 0(position_attrib) as being used
+    glEnableVertexAttribArray(position_attrib);
+
+    // Make the new VBO active.
+    glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
+
 
     return true;
 }
 
-void handleKeys(SDL_Keycode key)
+void handle_keys(SDL_Keycode key)
 {
     if (key == SDLK_q) {
         SDL_Event e;
@@ -175,8 +192,7 @@ void render()
 void close()
 {
     // Destroy window   
-    SDL_DestroyWindow(gWindow);
-    gWindow = NULL;
+    SDL_DestroyWindow(g_window);
 
     // Quit SDL subsystems
     SDL_Quit();
@@ -202,7 +218,7 @@ int main(int argc, char *argv[])
                 } else if (e.type == SDL_KEYDOWN) {
                     // Handle keypress
                     if (!e.key.repeat)
-                        handleKeys(e.key.keysym.sym);
+                        handle_keys(e.key.keysym.sym);
                 }
             }
 
@@ -210,7 +226,7 @@ int main(int argc, char *argv[])
             
             // Update screen. This is where SDL blocks and spends most of its
             // time, waiting until it can swap buffers.
-            SDL_GL_SwapWindow(gWindow);
+            SDL_GL_SwapWindow(g_window);
         }
     }
 
