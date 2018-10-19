@@ -1,9 +1,10 @@
+// vi:fo=qacj com=b\://
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
 #include <SDL2/SDL.h>
-#include <GL/glew.h>
+#include <GL/glew.h>  // needed for shaders and shit.
 #include <SDL2/SDL_opengl.h>
 #include <GL/glu.h>
 
@@ -16,11 +17,11 @@
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / SCREEN_HEIGHT)
 
 float position_data[] = {
-         0.f,  1.f,  0.f,
-        -1.f, -1.f,  0.f,
-         1.f, -1.f,  0.f
+         0,  1,
+        -1, -1,
+         1, -1
     };
-#define N_VERTICES (sizeof(position_data)/sizeof(float) / 3)
+#define N_VERTICES (sizeof(position_data)/sizeof(float) / 2)
 
 
 // Starts up SDL, creates window, and initialises the SDL- and vendor-specific
@@ -127,11 +128,12 @@ bool init_gl()
             position_data, GL_STATIC_DRAW);
 
     // Define a vertex attribute array as follows. Each element of the array is
-    // a 3-dimensional vector of GL_FLOATS. The underlying data is the
+    // a 2-dimensional vector of GL_FLOATS. The underlying data is the
     // currently bound buffer (position_vbo). Store this defining information
-    // in position_attrib (index 0).
+    // in position_attrib (index 0). These arrays are used as inputs and
+    // outputs for vertex shaders.
     const unsigned int position_attrib = 0;
-    glVertexAttribPointer(position_attrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
     // position_vbo and position_attrib are ready. Unbind the VBO.
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -141,8 +143,8 @@ bool init_gl()
     GLuint shader_program = glCreateProgram();
 
     // Pass position_attrib to the "position" input of the vertex shader.  This
-    // will associate one 3-vector out of position_data with every vertex the
-    // vertex shader processes. That 3-vector gets accessed by the name
+    // will associate one 2-vector out of position_data with every vertex the
+    // vertex shader processes. That 2-vector gets accessed by the name
     // "position". It could be any name or any data type. It is up to the
     // vertex shader to figure out how to turn that data into a vertex
     // position. In this simple example, it's just a one-to-one mapping.
@@ -158,14 +160,14 @@ bool init_gl()
     glClearColor(0, 0, 0, 1);
 
 
-    // Use our shader in all subsequent draw calls.
-    glUseProgram(shader_program);
+    // Use the new VBO in subsequent draw calls.
+    glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
 
     // Enable attribute index 0(position_attrib) as being used
     glEnableVertexAttribArray(position_attrib);
 
-    // Make the new VBO active.
-    glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
+    // Use our shader in all subsequent draw calls.
+    glUseProgram(shader_program);
 
 
     return true;
