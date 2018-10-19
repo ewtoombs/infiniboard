@@ -6,6 +6,6 @@ else:
 
 helpers = env.Object('helpers.cpp')
 
-env.Program('infiniboard', ['infiniboard.cpp', helpers],
-        LIBS=['SDL2', 'GLU', 'GL'])
-env.Program('load_test', ['load_test.cpp', helpers])
+env.Program('infiniboard', [env.Object('infiniboard.cpp'), helpers],
+        LIBS=['SDL2', 'GLU', 'GL', 'GLEW'])
+env.Program('load_test', [env.Object('load_test.cpp'), helpers])
