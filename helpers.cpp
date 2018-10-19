@@ -45,13 +45,12 @@ double modsq(complex<double> x)
     return sq(x.real()) + sq(x.imag());
 }
 
-// Read a file to a string. Stop before first null character, because fuck that
-// shit.
+// Read a file to a string.
 char *load(const char *fn)
 {
     int fd = open(fn, O_RDONLY);
-
     assert(fd != -1);
+
     off_t size = lseek(fd, 0, SEEK_END);
     assert(size != -1);
     assert(lseek(fd, 0, SEEK_SET) != -1);
@@ -61,6 +60,7 @@ char *load(const char *fn)
 
     char *p = buf;
     for (;;) {
+        // File has gotten bigger since we started? Fuck that.
         assert(p - buf < size);
         ssize_t nread = read(fd, (char *)p, 0x10000);
         assert(nread != -1);
@@ -69,11 +69,9 @@ char *load(const char *fn)
             break;
         }
 
-        char *nullbyte = (char *)memchr((char *)p, '\0', nread);
-        if (nullbyte != NULL) {
-            buf = (char *)realloc((char *)buf, nullbyte - buf);
-            break;
-        }
+        // Null character? Fuck that shit.
+        void *nullbyte = memchr((char *)p, '\0', nread);
+        assert(nullbyte == NULL);
 
         p += nread;
     }
