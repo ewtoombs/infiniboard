@@ -1,11 +1,14 @@
 # vim:ft=python
-if int(ARGUMENTS.get('debug', 0)) == 1:
-    env = Environment(CXX = 'g++', CXXFLAGS = '-ggdb -DDEBUG')
+if int(ARGUMENTS.get('debug', 1)) == 1:
+    env = Environment(CXX = 'g++', CXXFLAGS = '-ggdb')
 else:
-    env = Environment(CXX = 'g++', CXXFLAGS = '-s -O2')
+    env = Environment(CXX = 'g++', CXXFLAGS = '-s -O2 -DNDEBUG')
+
+env.gl_libs = ['GL', 'GLU', 'GLEW']
 
 helpers = env.Object('helpers.cpp')
 
-env.Program('infiniboard', [env.Object('infiniboard.cpp'), helpers],
-        LIBS=['SDL2', 'GLU', 'GL', 'GLEW'])
-env.Program('load_test', [env.Object('load_test.cpp'), helpers])
+env.Program('infiniboard', ['infiniboard.cpp', helpers],
+        LIBS=['SDL2'] + env.gl_libs)
+env.Program('load_test', ['load_test.cpp', helpers],
+        LIBS=env.gl_libs)

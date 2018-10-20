@@ -1,3 +1,5 @@
+// vi:fo=qacj com=b\://
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

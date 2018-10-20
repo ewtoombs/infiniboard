@@ -1,8 +1,15 @@
+// vi:fo=qacj com=b\://
+
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <complex>
+
+#include <GL/glew.h>  // needed for shaders and shit.
+#include <SDL2/SDL_opengl.h>
+
+#include "helpers.hpp"
 
 using namespace std;
 
@@ -78,4 +85,52 @@ char *load(const char *fn)
     assert(close(fd) == 0);
 
     return buf;
+}
+
+// Do not call this function directly. Use the macro gl_assert(). Use it after
+// an OpenGL API call to abort with a helpful error message if anything goes
+// wrong. Example:
+/// 
+void _gl_assert(const char *file, unsigned int line, const char *function)
+{
+    GLenum e = glGetError();
+    if (e != GL_NO_ERROR) {
+        fprintf(stderr, "GL assertion failed. file: %s\n"
+                "function: %s\nline: %d     GL error: %s\n",
+                file, function, line, gluErrorString(e));
+        abort();
+    }
+}
+
+// Compile the "type" shader named "filename" and attach it to
+// "shader_program".
+static void compile_shader(GLenum type, const char *filename,
+        GLuint shader_program)
+{
+    GLuint shader = glCreateShader(type);
+    char *source = load(filename);
+    glShaderSource(shader, 1, &source, 0);
+    glCompileShader(shader);
+#ifndef NDEBUG
+    GLint success;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        GLint log_length;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &log_length);
+        char *log = (char *)malloc(log_length);
+        glGetShaderInfoLog(shader, log_length, NULL, log);
+        fprintf(stderr, "Failed to compile %s:\n%s", filename, log);
+        abort();
+    }
+#endif
+    glAttachShader(shader_program, shader);
+}
+
+// Compile the vertex shader named "vertfile" and the fragment shader named
+// "fragfile". Attach both to shader_program.
+void compile_shaders(const char *vertfile, const char *fragfile,
+        GLuint shader_program)
+{
+    compile_shader(GL_VERTEX_SHADER, vertfile, shader_program);
+    compile_shader(GL_FRAGMENT_SHADER, fragfile, shader_program);
 }

@@ -1,4 +1,5 @@
 // vi:fo=qacj com=b\://
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -10,6 +11,7 @@
 
 #include "helpers.hpp"
 
+
 // Screen dimension constants
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
@@ -17,12 +19,12 @@
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / SCREEN_HEIGHT)
 
 float position_data[] = {
-         0,  1,
-        -1, -1,
-         1, -1
+         1,  1,    -1,  1,
+        -1,  1,    -1, -1,
+        -1, -1,     1, -1,
+         1, -1,     1,  1
     };
 #define N_VERTICES (sizeof(position_data)/sizeof(float) / 2)
-
 
 // Starts up SDL, creates window, and initialises the SDL- and vendor-specific
 // OpenGL state.
@@ -36,16 +38,10 @@ void render();
 // Frees media and shuts down SDL.
 void close();
 
-// Compile the "type" shader named "filename" and attach it to "shader_program".
-void compile_shader(GLenum type, const char *filename, GLuint shader_program);
-// Compile the vertex shader named "vertfile" and the fragment shader named
-// "fragfile". Attach both to shader_program.
-void compile_shaders(const char *vertfile, const char *fragfile,
-        GLuint shader_program);
-
 
 // The window we'll be rendering to.
 SDL_Window *g_window = NULL;
+
 
 
 bool init()
@@ -96,22 +92,6 @@ bool init()
         return false;
     }
     return true;
-}
-
-void compile_shader(GLenum type, const char *filename, GLuint shader_program)
-{
-    GLuint shader = glCreateShader(type);
-    char *source = load(filename);
-    glShaderSource(shader, 1, &source, 0);
-    glCompileShader(shader);
-    glAttachShader(shader_program, shader);
-}
-
-void compile_shaders(const char *vertfile, const char *fragfile,
-        GLuint shader_program)
-{
-    compile_shader(GL_VERTEX_SHADER, vertfile, shader_program);
-    compile_shader(GL_FRAGMENT_SHADER, fragfile, shader_program);
 }
 
 bool init_gl()
@@ -170,6 +150,12 @@ bool init_gl()
     glUseProgram(shader_program);
 
 
+    // For all subsequent draw calls, pass SCREEN_RATIO into the uniform vertex
+    // shader input, screen_ratio.
+    glUniform1f(glGetUniformLocation(shader_program, "screen_ratio"),
+            SCREEN_RATIO);
+
+
     return true;
 }
 
@@ -188,7 +174,7 @@ void render()
     // Clear the screen with the current glClearColor.
     glClear(GL_COLOR_BUFFER_BIT);
     // Draw with the active shader.
-    glDrawArrays(GL_TRIANGLES, 0, N_VERTICES);
+    glDrawArrays(GL_LINES, 0, N_VERTICES);
 }
 
 void close()
