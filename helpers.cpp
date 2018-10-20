@@ -90,7 +90,7 @@ char *load(const char *fn)
 // Do not call this function directly. Use the macro gl_assert(). Use it after
 // an OpenGL API call to abort with a helpful error message if anything goes
 // wrong. Example:
-/// 
+/// glCompileShader(shader); gl_assert();
 void _gl_assert(const char *file, unsigned int line, const char *function)
 {
     GLenum e = glGetError();
