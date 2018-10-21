@@ -1,0 +1,8 @@
+Import('*')
+
+helpers = env.Object('helpers.cpp')
+
+env.Program('infiniboard', ['infiniboard.cpp', helpers],
+        LIBS=['SDL2'] + env.gl_libs)
+env.Program('load_test', ['load_test.cpp', helpers],
+        LIBS=env.gl_libs)

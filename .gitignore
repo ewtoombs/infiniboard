@@ -1,5 +1,3 @@
-*.o
 .sconsign.dblite
+build
 data
-infiniboard
-load_test
