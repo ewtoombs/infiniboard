@@ -1,4 +1,4 @@
-# vim:ft=python
+# vi:ft=python fo=qacj
 if int(ARGUMENTS.get('debug', 1)) == 1:
     env = Environment(CXX = 'g++', CXXFLAGS = '-ggdb')
 else:

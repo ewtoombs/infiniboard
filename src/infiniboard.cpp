@@ -11,20 +11,14 @@
 
 #include "helpers.hpp"
 
+#include "poincare.hpp"
+
 
 // Screen dimension constants
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / SCREEN_HEIGHT)
-
-float position_data[] = {
-         1,  1,    -1,  1,
-        -1,  1,    -1, -1,
-        -1, -1,     1, -1,
-         1, -1,     1,  1
-    };
-#define N_VERTICES (sizeof(position_data)/sizeof(float) / 2)
 
 // Starts up SDL, creates window, and initialises the SDL- and vendor-specific
 // OpenGL state.
@@ -41,7 +35,7 @@ void close();
 
 // The window we'll be rendering to.
 SDL_Window *g_window = NULL;
-
+unsigned g_nvertices = 0;
 
 
 bool init()
@@ -103,8 +97,12 @@ bool init_gl()
     // Make the new VBO active.
     glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
 
+    // Make the vertex data.
+    complex<float> *position_data;
+    poincare::tiling(4, 5, 5, 4, &position_data, &g_nvertices);
+
     // Upload the vertex data in position_data to the video device.
-    glBufferData(GL_ARRAY_BUFFER, sizeof(position_data),
+    glBufferData(GL_ARRAY_BUFFER, g_nvertices*sizeof(complex<float>),
             position_data, GL_STATIC_DRAW);
 
     // Define a vertex attribute array as follows. Each element of the array is
@@ -130,7 +128,7 @@ bool init_gl()
     // position. In this simple example, it's just a one-to-one mapping.
     glBindAttribLocation(shader_program, position_attrib, "position");
 
-    compile_shaders("shader.vert", "shader.frag", shader_program);
+    compile_shaders("glsl/shader.vert", "glsl/shader.frag", shader_program);
 
     glLinkProgram(shader_program);
 
@@ -154,6 +152,8 @@ bool init_gl()
     // shader input, screen_ratio.
     glUniform1f(glGetUniformLocation(shader_program, "screen_ratio"),
             SCREEN_RATIO);
+    glUniform2f(glGetUniformLocation(shader_program, "shift"),
+            0.2f, 0.1f);
 
 
     return true;
@@ -174,12 +174,12 @@ void render()
     // Clear the screen with the current glClearColor.
     glClear(GL_COLOR_BUFFER_BIT);
     // Draw with the active shader.
-    glDrawArrays(GL_LINES, 0, N_VERTICES);
+    glDrawArrays(GL_LINES, 0, g_nvertices);
 }
 
 void close()
 {
-    // Destroy window   
+    // Destroy window
     SDL_DestroyWindow(g_window);
 
     // Quit SDL subsystems
@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
             }
 
             render();
-            
+
             // Update screen. This is where SDL blocks and spends most of its
             // time, waiting until it can swap buffers.
             SDL_GL_SwapWindow(g_window);

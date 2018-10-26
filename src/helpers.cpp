@@ -4,50 +4,51 @@
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
+
 #include <complex>
+using namespace std;
 
 #include <GL/glew.h>  // needed for shaders and shit.
 #include <SDL2/SDL_opengl.h>
 
 #include "helpers.hpp"
 
-using namespace std;
 
 // Computes x^n, where n is a natural number.
-double pown(double x, unsigned n)
+float pown(float x, unsigned n)
 {
-    double y = 1;
+    float y = 1;
     // n = 2*d + r. x^n = (x^2)^d * x^r.
     unsigned d = n >> 1;
     unsigned r = n & 1;
-    double x_2_d = d == 0? 1 : pown(x*x, d);
-    double x_r = r == 0? 1 : x;
+    float x_2_d = d == 0? 1 : pown(x*x, d);
+    float x_r = r == 0? 1 : x;
     return x_2_d*x_r;
 }
 // The linear implementation.
-double pown_l(double x, unsigned n)
+float pown_l(float x, unsigned n)
 {
-    double y = 1;
+    float y = 1;
     for (unsigned i = 0; i < n; i++)
         y *= x;
     return y;
 }
 
 // factorials
-double fact(unsigned n)
+float fact(unsigned n)
 {
-    double m = 1;
+    float m = 1;
     for (unsigned i = n; i; i--)
         m *= i;
     return m;
 }
 
-double sq(double x)
+float sq(float x)
 {
     return x*x;
 }
 
-double modsq(complex<double> x)
+float modsq(complex<float> x)
 {
     return sq(x.real()) + sq(x.imag());
 }
@@ -133,4 +134,27 @@ void compile_shaders(const char *vertfile, const char *fragfile,
 {
     compile_shader(GL_VERTEX_SHADER, vertfile, shader_program);
     compile_shader(GL_FRAGMENT_SHADER, fragfile, shader_program);
+}
+
+complex<float> *linspacecf(complex<float> a, complex<float> b, unsigned N)
+{
+    DEF_ARRAY(complex<float>, y, N);
+    for (unsigned u = 0; u < N; u++) {
+        y[u] = a + (b - a)/(float)(N - 1) * (float)u;
+    }
+    return y;
+}
+
+void line_strip_to_lines(complex<float> *x, unsigned n,
+        complex<float> **py, unsigned *pny)
+{
+    assert(n >= 2);
+    unsigned ny = 2*n - 2;
+    DEF_ARRAY(complex<float>, y, ny);
+    for (unsigned i = 0; i < n - 1; i++) {
+        y[2*i] = x[i];
+        y[2*i + 1] = x[i + 1];
+    }
+    *py = y;
+    *pny = ny;
 }
