@@ -17,16 +17,20 @@
 // Screen dimension constants
 #define SCREEN_WIDTH 640
 #define SCREEN_HEIGHT 480
+#define SCREEN_ZOOM 0.7f
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / SCREEN_HEIGHT)
+
+// Convert from screen coordinates to (complex) board coordinates.
+complex<float> screen_to_board(Sint32 x, Sint32 y);
 
 // Starts up SDL, creates window, and initialises the SDL- and vendor-specific
 // OpenGL state.
 bool init();
 // Initialises the generic OpenGL state.
 bool init_gl();
-// Input handler.
-void handle_keys(unsigned char key);
+void quit_listener(SDL_Event *e);
+void pan_listener(SDL_Event *e);
 // Per-frame actions.
 void render();
 // Frees media and shuts down SDL.
@@ -36,7 +40,18 @@ void close();
 // The window we'll be rendering to.
 SDL_Window *g_window = NULL;
 unsigned g_nvertices = 0;
+GLuint g_shader_program;
+complex<float> g_pan = 0.f;
 
+
+complex<float> screen_to_board(Sint32 x, Sint32 y)
+{
+    return
+        (
+            (float)(x - SCREEN_WIDTH/2) -
+            (float)(y - SCREEN_HEIGHT/2) * 1if
+        ) / (float)(SCREEN_HEIGHT/2) / SCREEN_ZOOM;
+}
 
 bool init()
 {
@@ -98,12 +113,12 @@ bool init_gl()
     glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
 
     // Make the vertex data.
-    complex<float> *position_data;
-    poincare::tiling(4, 5, 5, 4, &position_data, &g_nvertices);
+    complex<float> *background_data;
+    poincare::tiling(4, 5, 5, 4, &background_data, &g_nvertices);
 
-    // Upload the vertex data in position_data to the video device.
+    // Upload the vertex data in background_data to the video device.
     glBufferData(GL_ARRAY_BUFFER, g_nvertices*sizeof(complex<float>),
-            position_data, GL_STATIC_DRAW);
+            background_data, GL_STATIC_DRAW);
 
     // Define a vertex attribute array as follows. Each element of the array is
     // a 2-dimensional vector of GL_FLOATS. The underlying data is the
@@ -118,19 +133,19 @@ bool init_gl()
 
 
     //---- Create the shader program. ----
-    GLuint shader_program = glCreateProgram();
+    g_shader_program = glCreateProgram();
 
     // Pass position_attrib to the "position" input of the vertex shader.  This
-    // will associate one 2-vector out of position_data with every vertex the
+    // will associate one 2-vector out of background_data with every vertex the
     // vertex shader processes. That 2-vector gets accessed by the name
     // "position". It could be any name or any data type. It is up to the
     // vertex shader to figure out how to turn that data into a vertex
-    // position. In this simple example, it's just a one-to-one mapping.
-    glBindAttribLocation(shader_program, position_attrib, "position");
+    // position.
+    glBindAttribLocation(g_shader_program, position_attrib, "position");
 
-    compile_shaders("glsl/shader.vert", "glsl/shader.frag", shader_program);
+    compile_shaders("glsl/shader.vert", "glsl/shader.frag", g_shader_program);
 
-    glLinkProgram(shader_program);
+    glLinkProgram(g_shader_program);
 
 
     // Set the colour to be used in all subsequent glClear(GL_COLOR_BUFFER_BIT)
@@ -145,32 +160,53 @@ bool init_gl()
     glEnableVertexAttribArray(position_attrib);
 
     // Use our shader in all subsequent draw calls.
-    glUseProgram(shader_program);
+    glUseProgram(g_shader_program);
 
 
     // For all subsequent draw calls, pass SCREEN_RATIO into the uniform vertex
     // shader input, screen_ratio.
-    glUniform1f(glGetUniformLocation(shader_program, "screen_ratio"),
+    glUniform1f(glGetUniformLocation(g_shader_program, "screen_ratio"),
             SCREEN_RATIO);
-    glUniform2f(glGetUniformLocation(shader_program, "shift"),
-            0.2f, 0.1f);
+    glUniform1f(glGetUniformLocation(g_shader_program, "screen_zoom"),
+            SCREEN_ZOOM);
 
 
     return true;
 }
 
-void handle_keys(SDL_Keycode key)
+void quit_listener(SDL_Event *e)
 {
-    if (key == SDLK_q) {
-        SDL_Event e;
-        e.type = SDL_QUIT;
-        e.quit.timestamp = time(NULL);
-        SDL_PushEvent(&e);
+    if (e->type == SDL_KEYDOWN) {
+        if (!e->key.repeat && e->key.keysym.sym == SDLK_q) {
+            SDL_Event qe;
+            qe.type = SDL_QUIT;
+            qe.quit.timestamp = time(NULL);
+            SDL_PushEvent(&qe);
+        }
+    }
+}
+void pan_listener(SDL_Event *e)
+{
+    static bool dragging = false;
+    if (!dragging) {
+        if (e->type == SDL_MOUSEBUTTONDOWN) {
+            dragging = true;
+            g_pan = screen_to_board(e->button.x, e->button.y);
+        }
+    } else {
+        if (e->type == SDL_MOUSEMOTION)
+            g_pan = screen_to_board(e->motion.x, e->motion.y);
+        if (e->type == SDL_MOUSEBUTTONUP)
+            dragging = false;
     }
 }
 
+
 void render()
 {
+    glUniform2f(glGetUniformLocation(g_shader_program, "pan"),
+            real(g_pan), imag(g_pan));
+
     // Clear the screen with the current glClearColor.
     glClear(GL_COLOR_BUFFER_BIT);
     // Draw with the active shader.
@@ -192,8 +228,7 @@ int main(int argc, char *argv[])
     if (!init()) {
         printf("Failed to initialise!\n");
     } else {
-        bool quit = false;
-        while (!quit) {
+        for (;;) {
             for (;;) {
                 // Handle events on queue
                 SDL_Event e;
@@ -202,12 +237,10 @@ int main(int argc, char *argv[])
                 // User requests quit
                 if (e.type == SDL_QUIT) {
                     puts("Queue received SDL_QUIT.");
-                    quit = true;
-                } else if (e.type == SDL_KEYDOWN) {
-                    // Handle keypress
-                    if (!e.key.repeat)
-                        handle_keys(e.key.keysym.sym);
+                    goto break_outer;
                 }
+                quit_listener(&e);
+                pan_listener(&e);
             }
 
             render();
@@ -217,6 +250,7 @@ int main(int argc, char *argv[])
             SDL_GL_SwapWindow(g_window);
         }
     }
+break_outer:
 
     // Free resources and close SDL
     close();

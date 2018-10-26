@@ -30,11 +30,13 @@ vec2 S(vec2 a, vec2 x)
 attribute vec2 position;
 
 uniform float screen_ratio;
-uniform vec2 shift;
+uniform float screen_zoom;
+uniform vec2 pan;
 
 void main() 
 {
-    vec2 y = S(shift, position);
-    vec2 u = 0.99*y;
+    vec2 y = S(pan, position);
+
+    vec2 u = screen_zoom*y;
     gl_Position = vec4(u.x/screen_ratio, u.y, 0.0, 1.0);
 }
