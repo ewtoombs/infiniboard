@@ -4,8 +4,11 @@
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
+#include <signal.h>
 
 #include <complex>
+#include <cmath>
 using namespace std;
 
 #include <GL/glew.h>  // needed for shaders and shit.
@@ -157,4 +160,47 @@ void line_strip_to_lines(complex<float> *x, unsigned n,
     }
     *py = y;
     *pny = ny;
+}
+
+void d_to_timespec(double t, struct timespec *ts)
+{
+    ts->tv_sec = (time_t)(floor(t));
+    ts->tv_nsec = (long)(t*1e9) % (1000*1000*1000);
+}
+
+double timespec_to_d(struct timespec *ts)
+{
+    return (double)ts->tv_sec + 1e-9*(double)ts->tv_nsec;
+}
+
+double dtime(void)
+{
+    struct timespec ts;
+    assert(clock_gettime(CLOCK_MONOTONIC, &ts) == 0);
+    return timespec_to_d(&ts);
+}
+
+
+timer_t create_callback_timer(void (*callback)(void *), void *data)
+{
+    struct sigevent se;
+    se.sigev_notify = SIGEV_THREAD;
+    se.sigev_signo = 0;
+    se.sigev_value.sival_ptr = data;
+    se.sigev_notify_function = (void (*)(union sigval))callback;
+    se.sigev_notify_attributes = NULL;
+
+    timer_t timer;
+
+    assert(timer_create(CLOCK_MONOTONIC, &se, &timer) == 0);
+
+    return timer;
+}
+void timer_settime_d(timer_t timer, double t)
+{
+    struct itimerspec its;
+    its.it_interval.tv_sec = 0;
+    its.it_interval.tv_nsec = 0;
+    d_to_timespec(t, &its.it_value);
+    assert(timer_settime(timer, 0, &its, NULL) == 0);
 }

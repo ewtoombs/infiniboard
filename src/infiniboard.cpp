@@ -15,9 +15,9 @@
 
 
 // Screen dimension constants
-#define SCREEN_WIDTH 640
-#define SCREEN_HEIGHT 480
-#define SCREEN_ZOOM 0.7f
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 600
+#define SCREEN_ZOOM 0.99f
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / SCREEN_HEIGHT)
 
@@ -35,13 +35,17 @@ void pan_listener(SDL_Event *e);
 void render();
 // Frees media and shuts down SDL.
 void close();
+Uint32 push_render_event(Uint32 interval, void *param);
+bool tasting(void);
 
 
-// The window we'll be rendering to.
+// Globals, prefixed with g_.
 SDL_Window *g_window = NULL;
 unsigned g_nvertices = 0;
 GLuint g_shader_program;
 complex<float> g_pan = 0.f;
+Uint32 g_render_event;
+unsigned g_frame_counter = 0;
 
 
 complex<float> screen_to_board(Sint32 x, Sint32 y)
@@ -207,8 +211,6 @@ void render()
     glUniform2f(glGetUniformLocation(g_shader_program, "pan"),
             real(g_pan), imag(g_pan));
 
-    // Clear the screen with the current glClearColor.
-    glClear(GL_COLOR_BUFFER_BIT);
     // Draw with the active shader.
     glDrawArrays(GL_LINES, 0, g_nvertices);
 }
@@ -222,35 +224,95 @@ void close()
     SDL_Quit();
 }
 
+void push_render_event(void *param)
+{
+    SDL_Event e;
+    e.type = g_render_event;
+    SDL_PushEvent(&e);
+}
+// Give the stew a taste every once in a while.
+bool tasting(void)
+{
+    return g_frame_counter  == 0;
+}
 int main(int argc, char *argv[])
 {
+    cout.precision(16);  // Show me all of the digits by default.
+
     // Start up SDL and create window
     if (!init()) {
         printf("Failed to initialise!\n");
     } else {
+        g_render_event = SDL_RegisterEvents(1);
+        push_render_event(NULL);
+
+        timer_t render_timer = create_callback_timer(push_render_event, NULL);
+
+        SDL_DisplayMode m;
+        SDL_GetCurrentDisplayMode(0, &m);
+        double T = 1. / (double)m.refresh_rate;
+        printf("T = %5fms\n", T*1000.);
+
+        double t_last_frame = dtime();
         for (;;) {
-            for (;;) {
-                // Handle events on queue
-                SDL_Event e;
-                if (SDL_PollEvent(&e) == 0)
-                    break;
-                // User requests quit
-                if (e.type == SDL_QUIT) {
-                    puts("Queue received SDL_QUIT.");
-                    goto break_outer;
-                }
-                quit_listener(&e);
-                pan_listener(&e);
+            // Wait indefinitely until next event.
+            double u;
+            if (tasting())
+                u = dtime();
+            SDL_Event e;
+            SDL_WaitEvent(&e);
+            if (tasting())
+                printf("WaitEvent takes %5fms.\n", (dtime() - u)*1000.);
+
+            // User requests quit.
+            if (e.type == SDL_QUIT) {
+                puts("Queue received SDL_QUIT.");
+                break;
             }
 
-            render();
+            quit_listener(&e);
+            pan_listener(&e);
 
-            // Update screen. This is where SDL blocks and spends most of its
-            // time, waiting until it can swap buffers.
-            SDL_GL_SwapWindow(g_window);
+            if (e.type == g_render_event) {
+                double t = dtime();
+                if (tasting())
+                    printf("Time since last frame: %5fms\n",
+                            (t - t_last_frame)*1000.);
+                t_last_frame = t;
+
+                // Clear the screen with the current glClearColor. OpenGL will
+                // always block here.  It blocks on the first API call after a
+                // swap. How long depends on how long before the next vsync.
+                if (tasting())
+                    t = dtime();
+                glClear(GL_COLOR_BUFFER_BIT);
+                if (tasting())
+                    printf("glClear takes %5fms.\n", (dtime() - t)*1000.);
+
+                // Do all OpenGL drawing commands. 
+                if (tasting())
+                    t = dtime();
+                render();
+                glFinish();
+                if (tasting())
+                    printf("Render takes %5fms.\n", (dtime() - t)*1000.);
+
+                if (tasting())
+                    t = dtime();
+                SDL_GL_SwapWindow(g_window);
+                if (tasting())
+                    printf("Swap takes %5fms.\n", (dtime() - t)*1000.);
+
+                // Schedule next render just before the next vsync. Allow some
+                // time for rendering.
+                timer_settime_d(render_timer, T - 4e-3);
+
+
+                g_frame_counter++;
+                g_frame_counter &= 0xff;
+            }
         }
     }
-break_outer:
 
     // Free resources and close SDL
     close();

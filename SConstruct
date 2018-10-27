@@ -3,7 +3,7 @@ if int(ARGUMENTS.get('debug', 1)) == 1:
     env = Environment(CXX = 'g++', CXXFLAGS = '-ggdb')
 else:
     env = Environment(CXX = 'g++', CXXFLAGS = '-s -O2 -DNDEBUG')
-env.gl_libs = ['GL', 'GLU', 'GLEW']
+env.libs = ['GL', 'GLU', 'GLEW', 'rt']
 Export('env')
 
 SConscript(['src/SConscript'], variant_dir='build', duplicate=0)
