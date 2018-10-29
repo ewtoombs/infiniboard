@@ -34,9 +34,7 @@ void tiling(unsigned p, unsigned q, unsigned res, unsigned niter,
     float v = cos((theta - phi)/2);
     float d = sqrt(u/v);
 
-    float w = sqrt(u*v);
-    float c = w/cos(phi/2);
-    float f = w/cos(theta/2);
+    float c = sqrt(u*v)/cos(phi/2);
 
     complex<float> A = exp(1if*theta);
     // D = B^-1.
