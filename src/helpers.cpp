@@ -180,6 +180,13 @@ double dtime(void)
     return timespec_to_d(&ts);
 }
 
+void dsleep(double t)
+{
+    struct timespec ts;
+    d_to_timespec(t, &ts);
+    assert(clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL) == 0);
+}
+
 
 timer_t create_callback_timer(void (*callback)(void *), void *data)
 {
