@@ -274,20 +274,14 @@ int main(int argc, char *argv[])
             pan_listener(&e);
 
             if (e.type == g_render_event) {
+                // We have awoken! It is only 4 milliseconds before the next
+                // vsync, and we have got a frame to render!
                 double t = dtime();
                 if (tasting())
                     printf("Time since last frame: %5fms\n",
                             (t - t_last_frame)*1000.);
                 t_last_frame = t;
 
-                // Clear the screen with the current glClearColor. OpenGL will
-                // always block here.  It blocks on the first API call after a
-                // swap. How long depends on how long before the next vsync.
-                if (tasting())
-                    t = dtime();
-                glClear(GL_COLOR_BUFFER_BIT);
-                if (tasting())
-                    printf("glClear takes %5fms.\n", (dtime() - t)*1000.);
 
                 // Do all OpenGL drawing commands. 
                 if (tasting())
@@ -299,13 +293,30 @@ int main(int argc, char *argv[])
 
                 if (tasting())
                     t = dtime();
+                // Tell OpenGL that all subsequent openGL commands are to
+                // happen after the next buffer swap. Almost never swaps
+                // buffers, and in fact, will return immediately, no matter
+                // what happens. Will only actually swap buffers if the draw
+                // command took longer than the amount of time we gave it to
+                // finish.
                 SDL_GL_SwapWindow(g_window);
+                // Clear the screen with the current glClearColor. OpenGL will
+                // block here if the buffers haven't been swapped yet, which is
+                // almost always. This command is put here to ensure the
+                // buffers are indeed swapped before continuing!
+                glClear(GL_COLOR_BUFFER_BIT);
                 if (tasting())
                     printf("Swap takes %5fms.\n", (dtime() - t)*1000.);
 
-                // Schedule next render just before the next vsync. Allow some
-                // time for rendering.
+                // OK, the vsync has like /juuuust/ happened. The buffers have
+                // just been swapped for suresiez. Schedule next render just
+                // before the next vsync.  Allow some time for rendering.
                 timer_settime_d(render_timer, T - 4e-3);
+                // Use for testing instead of timer_settime_d(). Schedule next
+                // render event immediately, without waiting for all input
+                // events.  Mouse lag should increase considerably and all of
+                // the idle time should get transferred into the buffer swap.
+                //push_render_event(NULL);
 
 
                 g_frame_counter++;
