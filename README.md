@@ -38,11 +38,19 @@ list after I take care of some dirty edge cases in the background drawing.
 
 * dirty background edge cases
 * drawing
-* quantify mouse to screen response
+* interpolate drawn segments with some sexy cubic splines.
 * undo
 * erase of every segment in the path of a point cursor
 * clipped erase of everything under a finite-area erase cursor of variable
   size.
+* use the background's periodic nature to deliver the illusion of an infinite
+  background with a finite mesh. (Move the mesh back to the centre when the
+  distance exceeds a certain amount, and do it in a way that is impossible to
+  notice.)
+* store drawn segments in tiles, so that the size of the blackboard is truly
+  infinite, and to avert floating-point badness at great distances away from
+  the origin.
+* quantify mouse to screen response
 * scons debug=0 is spectacularly broken in multiple ways
 * touch screens and smart boards, pending acquisition of capable hardware.
 * vulkan, pending acquisition of vulkan-capable hardware. If this ever
@@ -57,8 +65,11 @@ list after I take care of some dirty edge cases in the background drawing.
 ## DEFINITELY-WILL-NOT-DO:
 
 * directx
-* eigen, or any other templatey C++ badness, but especially eigen. I do want to
-  clean up the math, but I think rust is the way to go there.
+* eigen, or any other templatey C++ badness, but especially eigen. As
+  rationale, I would show you literally any compile-time error message produced
+  by that library or any other piece of templated C++ code, but you might go
+  insane, H.  P.  Lovecraft style.  I do want to clean up the math, but I think
+  rust is the way to go there.
 
 
 
