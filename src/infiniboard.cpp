@@ -1,13 +1,9 @@
 // vi:fo=qacj com=b\://
 
 #include <stdio.h>
-#include <string.h>
-#include <time.h>
 
-#include <SDL2/SDL.h>
 #include <GL/glew.h>  // needed for shaders and shit.
-#include <SDL2/SDL_opengl.h>
-#include <GL/glu.h>
+#include <GLFW/glfw3.h>
 
 #include "helpers.hpp"
 
@@ -19,94 +15,92 @@
 #define SCREEN_HEIGHT 600
 #define SCREEN_ZOOM 0.99f
 
-#define SCREEN_RATIO ((float)SCREEN_WIDTH / SCREEN_HEIGHT)
+#define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
 
-// Convert from screen coordinates to (complex) board coordinates.
-complex<float> screen_to_board(Sint32 x, Sint32 y);
+complex<float> screen_to_board(double x, double y);
 
-// Starts up SDL, creates window, and initialises the SDL- and vendor-specific
-// OpenGL state.
-bool init();
-// Initialises the generic OpenGL state.
+void error_callback(int error, const char* description);
+bool init(void);
 bool init_gl();
-void quit_listener(SDL_Event *e);
-void pan_listener(SDL_Event *e);
-// Per-frame actions.
-void render();
-// Frees media and shuts down SDL.
-void close();
-Uint32 push_render_event(Uint32 interval, void *param);
+void key_callback(GLFWwindow *window, int key, int scancode,
+        int action, int mods);
+void cursor_position_callback(GLFWwindow *window, double xpos, double ypos);
+void mouse_button_callback(GLFWwindow *window, int button,
+        int action, int mods);
+void draw();
 bool tasting(void);
+void processEventsFor(double t);
 
 
 // Globals, prefixed with g_.
-SDL_Window *g_window = NULL;
+GLFWwindow *g_window = NULL;
 unsigned g_nvertices = 0;
 GLuint g_shader_program;
 complex<float> g_pan = 0.f;
-Uint32 g_render_event;
-unsigned g_frame_counter = 0;
+bool g_panning = false;
+unsigned char g_frame_counter = 0;
 
 
-complex<float> screen_to_board(Sint32 x, Sint32 y)
+// Convert from screen coordinates to (complex) board coordinates.
+complex<float> screen_to_board(double x, double y)
 {
     return
         (
-            (float)(x - SCREEN_WIDTH/2) -
-            (float)(y - SCREEN_HEIGHT/2) * 1if
-        ) / (float)(SCREEN_HEIGHT/2) / SCREEN_ZOOM;
+            (float)x - (float)SCREEN_WIDTH/2.f -
+            ((float)y - (float)SCREEN_HEIGHT/2.f) * 1if
+        ) / ((float)SCREEN_HEIGHT/2.f) / SCREEN_ZOOM;
 }
 
-bool init()
+// Starts up glfw, creates window, and initialises the glfw- and
+// vendor-specific OpenGL state.
+void error_callback(int error, const char *description)
 {
-    // Initialise SDL
-    if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS) < 0) {
-        printf("SDL could not initialise! SDL Error: %s\n", SDL_GetError());
+    fprintf(stderr, "Error: %s\n", description);
+}
+bool init(void)
+{
+    glfwSetErrorCallback(error_callback);
+
+    if (!glfwInit())
         return false;
-    }
 
-    // Use OpenGL 2.1
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 
-    // Create window
-    g_window = SDL_CreateWindow("infiniboard", SDL_WINDOWPOS_UNDEFINED,
-            SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT,
-            SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
-    if (g_window == NULL) {
-        printf("Window could not be created! SDL Error: %s\n",
-                SDL_GetError());
+    // Make the window.
+
+    // Set OpenGL version.
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    g_window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "infiniboard",
+            NULL, NULL);
+    if (g_window == NULL)
         return false;
-    }
+    glfwSetKeyCallback(g_window, key_callback);
+    glfwSetCursorPosCallback(g_window, cursor_position_callback);
+    glfwSetMouseButtonCallback(g_window, mouse_button_callback);
+    glfwMakeContextCurrent(g_window);
 
-    // Create context
-    SDL_GLContext context = SDL_GL_CreateContext(g_window);
-    if (context == NULL) {
-        printf("OpenGL context could not be created! SDL Error: %s\n",
-                SDL_GetError());
-        return false;
-    }
 
+    // Do the arcane OpenGL badness nobody but GLEW properly understands.
     GLenum glewError = glewInit();
     if (glewError != GLEW_OK) {
         printf("Error initialising GLEW! %s\n",
                 glewGetErrorString(glewError));
     }
 
-    // Use Vsync
-    if (SDL_GL_SetSwapInterval(1) < 0) {
-        printf("Warning: Unable to set VSync! SDL Error: %s\n",
-                SDL_GetError());
-    }
+    // Turn on double buffering and vsync. 1 is the maximum time in frames to
+    // wait before swapping buffers.
+    glfwSwapInterval(1);
 
-    // Initialise OpenGL
+    // Initialise OpenGL.
     if (!init_gl()) {
         printf("Unable to initialise OpenGL!\n");
         return false;
     }
+
     return true;
 }
 
+// Initialises the generic OpenGL state.
 bool init_gl()
 {
     //---- Make the VBO and the containing vertex attribute array. ----
@@ -178,35 +172,36 @@ bool init_gl()
     return true;
 }
 
-void quit_listener(SDL_Event *e)
+void key_callback(GLFWwindow *window, int key, int scancode,
+        int action, int mods)
 {
-    if (e->type == SDL_KEYDOWN) {
-        if (!e->key.repeat && e->key.keysym.sym == SDLK_q) {
-            SDL_Event qe;
-            qe.type = SDL_QUIT;
-            qe.quit.timestamp = time(NULL);
-            SDL_PushEvent(&qe);
-        }
-    }
+    if (key == GLFW_KEY_Q && action == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
-void pan_listener(SDL_Event *e)
+void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 {
-    static bool dragging = false;
-    if (!dragging) {
-        if (e->type == SDL_MOUSEBUTTONDOWN) {
-            dragging = true;
-            g_pan = screen_to_board(e->button.x, e->button.y);
+    if (g_panning)
+        g_pan = screen_to_board(xpos, ypos);
+}
+void mouse_button_callback(GLFWwindow *window, int button,
+        int action, int mods)
+{
+    if (!g_panning) {
+        if (action == GLFW_PRESS) {
+            g_panning = true;
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            g_pan = screen_to_board(xpos, ypos);
         }
     } else {
-        if (e->type == SDL_MOUSEMOTION)
-            g_pan = screen_to_board(e->motion.x, e->motion.y);
-        if (e->type == SDL_MOUSEBUTTONUP)
-            dragging = false;
+        if (action == GLFW_RELEASE)
+            g_panning = false;
     }
 }
 
 
-void render()
+// Per-frame actions.
+void draw()
 {
     glUniform2f(glGetUniformLocation(g_shader_program, "pan"),
             real(g_pan), imag(g_pan));
@@ -215,118 +210,92 @@ void render()
     glDrawArrays(GL_LINES, 0, g_nvertices);
 }
 
-void close()
-{
-    // Destroy window
-    SDL_DestroyWindow(g_window);
-
-    // Quit SDL subsystems
-    SDL_Quit();
-}
-
-void push_render_event(void *param)
-{
-    SDL_Event e;
-    e.type = g_render_event;
-    SDL_PushEvent(&e);
-}
 // Give the stew a taste every once in a while.
 bool tasting(void)
 {
-    return g_frame_counter  == 0;
+    return g_frame_counter == 0;
+}
+// Process events for dt seconds, then return. Should almost always return in
+// exactly dt seconds.
+void processEventsFor(double dt)
+{
+    double t0 = glfwGetTime();
+    for (;;) {
+        glfwWaitEventsTimeout(dt);
+        double t1 = glfwGetTime();
+        double u = t1 - t0;
+        if (u >= dt)
+            return;
+        dt -= u;
+    }
 }
 int main(int argc, char *argv[])
 {
     cout.precision(16);  // Show me all of the digits by default.
 
-    // Start up SDL and create window
+    // Start up glfw and create window.
     if (!init()) {
         printf("Failed to initialise!\n");
     } else {
-        g_render_event = SDL_RegisterEvents(1);
-        push_render_event(NULL);
-
-        timer_t render_timer = create_callback_timer(push_render_event, NULL);
-
-        SDL_DisplayMode m;
-        SDL_GetCurrentDisplayMode(0, &m);
-        double T = 1. / (double)m.refresh_rate;
+        const GLFWvidmode *m = glfwGetVideoMode(glfwGetPrimaryMonitor());
+        double T = 1. / (double)m->refreshRate;
         printf("T = %5fms\n", T*1000.);
 
         double t_last_frame = dtime();
-        for (;;) {
-            // Wait indefinitely until next event.
-            double u;
+        while (!glfwWindowShouldClose(g_window)) {  // once per frame.
+            // We have awoken! It is only 3 milliseconds before the next vsync,
+            // and we have got a frame to render!
+            double t = dtime();
             if (tasting())
-                u = dtime();
-            SDL_Event e;
-            SDL_WaitEvent(&e);
+                printf("Time since last frame: %5fms\n",
+                        (t - t_last_frame)*1000.);
+            t_last_frame = t;
+
+            // Do all OpenGL drawing commands. 
             if (tasting())
-                printf("WaitEvent takes %5fms.\n", (dtime() - u)*1000.);
+                t = dtime();
+            draw();
+            glFinish();
+            if (tasting())
+                printf("Draw takes %5fms.\n", (dtime() - t)*1000.);
 
-            // User requests quit.
-            if (e.type == SDL_QUIT) {
-                puts("Queue received SDL_QUIT.");
-                break;
-            }
+            if (tasting())
+                t = dtime();
+            // Tell OpenGL that all subsequent OpenGL commands are to happen
+            // after the next buffer swap. This will almost never actually swap
+            // the buffers, and in fact, will return immediately, no matter
+            // what happens.  This will only actually swap buffers if the
+            // drawing took longer than the amount of time we gave it to finish
+            // and we have missed the vsync.
+            glfwSwapBuffers(g_window);
+            // Clear the screen with the current glClearColor. OpenGL will
+            // block here if the buffers haven't been swapped yet, which is
+            // almost always. This command is put here to ensure the buffers
+            // are indeed swapped before continuing!
+            glClear(GL_COLOR_BUFFER_BIT);
+            if (tasting())
+                printf("Time waiting for vsync: %5fms.\n",
+                        (dtime() - t)*1000.);
 
-            quit_listener(&e);
-            pan_listener(&e);
-
-            if (e.type == g_render_event) {
-                // We have awoken! It is only 4 milliseconds before the next
-                // vsync, and we have got a frame to render!
-                double t = dtime();
-                if (tasting())
-                    printf("Time since last frame: %5fms\n",
-                            (t - t_last_frame)*1000.);
-                t_last_frame = t;
-
-
-                // Do all OpenGL drawing commands. 
-                if (tasting())
-                    t = dtime();
-                render();
-                glFinish();
-                if (tasting())
-                    printf("Render takes %5fms.\n", (dtime() - t)*1000.);
-
-                if (tasting())
-                    t = dtime();
-                // Tell OpenGL that all subsequent openGL commands are to
-                // happen after the next buffer swap. Almost never swaps
-                // buffers, and in fact, will return immediately, no matter
-                // what happens. Will only actually swap buffers if the draw
-                // command took longer than the amount of time we gave it to
-                // finish.
-                SDL_GL_SwapWindow(g_window);
-                // Clear the screen with the current glClearColor. OpenGL will
-                // block here if the buffers haven't been swapped yet, which is
-                // almost always. This command is put here to ensure the
-                // buffers are indeed swapped before continuing!
-                glClear(GL_COLOR_BUFFER_BIT);
-                if (tasting())
-                    printf("Swap takes %5fms.\n", (dtime() - t)*1000.);
-
-                // OK, the vsync has like /juuuust/ happened. The buffers have
-                // just been swapped for suresiez. Schedule next render just
-                // before the next vsync.  Allow some time for rendering.
-                timer_settime_d(render_timer, T - 4e-3);
-                // Use for testing instead of timer_settime_d(). Schedule next
-                // render event immediately, without waiting for all input
-                // events.  Mouse lag should increase considerably and all of
-                // the idle time should get transferred into the buffer swap.
-                //push_render_event(NULL);
+            // OK, the vsync has like /juuuust/ happened. The buffers have just
+            // been swapped for suresiez. Process events for T - 3ms, so that
+            // as many events as possible are used to determine the content of
+            // the next frame.
+            if (tasting())
+                t = dtime();
+            processEventsFor(T - 3e-3);
+            if (tasting())
+                printf("processEventsFor takes %5fms.\n", (dtime() - t)*1000.);
 
 
-                g_frame_counter++;
-                g_frame_counter &= 0xff;
-            }
+            g_frame_counter++;
         }
     }
 
-    // Free resources and close SDL
-    close();
+    // Destroy window
+    glfwDestroyWindow(g_window);
+
+    glfwTerminate();
 
     return 0;
 }
