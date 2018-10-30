@@ -66,6 +66,7 @@ list after I take care of some dirty edge cases in the background drawing.
 
 * directx
 * macs. It might work ootb, but it will not be supported.
+* Any operating system that uses the wrong path separator.
 * eigen, or any other templatey C++ badness, but especially eigen. As
   rationale, I would show you literally any compile-time error message produced
   by that library or any other piece of templated C++ code, but you might go
