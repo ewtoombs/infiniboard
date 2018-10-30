@@ -35,7 +35,7 @@ void processEventsFor(double t);
 // Globals, prefixed with g_.
 GLFWwindow *g_window = NULL;
 unsigned g_nvertices = 0;
-GLuint g_shader_program;
+GLuint g_background_program;
 complex<float> g_pan = 0.f;
 bool g_panning = false;
 unsigned char g_frame_counter = 0;
@@ -104,11 +104,11 @@ bool init(void)
 bool init_gl()
 {
     //---- Make the VBO and the containing vertex attribute array. ----
-    GLuint position_vbo;
-    glGenBuffers(1, &position_vbo);
+    GLuint background_vbo;
+    glGenBuffers(1, &background_vbo);
 
     // Make the new VBO active.
-    glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, background_vbo);
 
     // Make the vertex data.
     complex<float> *background_data;
@@ -120,30 +120,32 @@ bool init_gl()
 
     // Define a vertex attribute array as follows. Each element of the array is
     // a 2-dimensional vector of GL_FLOATS. The underlying data is the
-    // currently bound buffer (position_vbo). Store this defining information
-    // in position_attrib (index 0). These arrays are used as inputs and
-    // outputs for vertex shaders.
-    const unsigned int position_attrib = 0;
-    glVertexAttribPointer(position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    // currently bound buffer (background_vbo). Store this defining information
+    // in background_attrib (index 0). These arrays are used as inputs and
+    // outputs for vertex shaders. Note this does not specify the size of the
+    // array. That is done on every draw call instead.
+    const unsigned int background_attrib = 0;
+    glVertexAttribPointer(background_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
-    // position_vbo and position_attrib are ready. Unbind the VBO.
+    // background_vbo and background_attrib are ready. Unbind the VBO.
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 
     //---- Create the shader program. ----
-    g_shader_program = glCreateProgram();
+    g_background_program = glCreateProgram();
 
-    // Pass position_attrib to the "position" input of the vertex shader.  This
-    // will associate one 2-vector out of background_data with every vertex the
-    // vertex shader processes. That 2-vector gets accessed by the name
-    // "position". It could be any name or any data type. It is up to the
+    // Pass background_attrib to the "position" input of the vertex shader.
+    // This will associate one 2-vector out of background_data with every
+    // vertex the vertex shader processes. That 2-vector gets accessed by the
+    // name "position". It could be any name or any data type. It is up to the
     // vertex shader to figure out how to turn that data into a vertex
     // position.
-    glBindAttribLocation(g_shader_program, position_attrib, "position");
+    glBindAttribLocation(g_background_program, background_attrib, "position");
 
-    compile_shaders("glsl/shader.vert", "glsl/shader.frag", g_shader_program);
+    compile_shaders("glsl/poincare-pan.vert", "glsl/white.frag",
+            g_background_program);
 
-    glLinkProgram(g_shader_program);
+    glLinkProgram(g_background_program);
 
 
     // Set the colour to be used in all subsequent glClear(GL_COLOR_BUFFER_BIT)
@@ -152,20 +154,20 @@ bool init_gl()
 
 
     // Use the new VBO in subsequent draw calls.
-    glBindBuffer(GL_ARRAY_BUFFER, position_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, background_vbo);
 
-    // Enable attribute index 0(position_attrib) as being used
-    glEnableVertexAttribArray(position_attrib);
+    // Enable attribute index 0(background_attrib) as being used
+    glEnableVertexAttribArray(background_attrib);
 
     // Use our shader in all subsequent draw calls.
-    glUseProgram(g_shader_program);
+    glUseProgram(g_background_program);
 
 
     // For all subsequent draw calls, pass SCREEN_RATIO into the uniform vertex
     // shader input, screen_ratio.
-    glUniform1f(glGetUniformLocation(g_shader_program, "screen_ratio"),
+    glUniform1f(glGetUniformLocation(g_background_program, "screen_ratio"),
             SCREEN_RATIO);
-    glUniform1f(glGetUniformLocation(g_shader_program, "screen_zoom"),
+    glUniform1f(glGetUniformLocation(g_background_program, "screen_zoom"),
             SCREEN_ZOOM);
 
 
@@ -203,7 +205,7 @@ void mouse_button_callback(GLFWwindow *window, int button,
 // Per-frame actions.
 void draw()
 {
-    glUniform2f(glGetUniformLocation(g_shader_program, "pan"),
+    glUniform2f(glGetUniformLocation(g_background_program, "pan"),
             real(g_pan), imag(g_pan));
 
     // Draw with the active shader.
