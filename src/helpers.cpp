@@ -12,7 +12,7 @@
 using namespace std;
 
 #include <GL/glew.h>  // needed for shaders and shit.
-#include <SDL2/SDL_opengl.h>
+#include <GLFW/glfw3.h>
 
 #include "helpers.hpp"
 

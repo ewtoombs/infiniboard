@@ -6,7 +6,7 @@
 #include <cstring>
 
 #include <GL/glew.h>  // needed for shaders and shit.
-#include <SDL2/SDL_opengl.h>
+#include <GLFW/glfw3.h>
 
 #define TAU 6.283185307179586
 
