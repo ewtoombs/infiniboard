@@ -245,6 +245,7 @@ int main(int argc, char *argv[])
 
         double t_last_frame = dtime();
         while (!glfwWindowShouldClose(g_window)) {  // once per frame.
+            double t;
             if (tasting())
                 t = dtime();
             // Tell OpenGL that all subsequent OpenGL commands are to happen
@@ -263,12 +264,20 @@ int main(int argc, char *argv[])
                 printf("Time waiting for vsync: %5fms.\n",
                         (dtime() - t)*1000.);
 
+            g_frame_counter++;
+
             //---------------- ***VSYNC*** ----------------
 
             // OK, the vsync has like /juuuust/ happened. The buffers have just
-            // been swapped for suresiez. Process events for T - 3ms, so that
-            // as many events as possible are used to determine the content of
-            // the next frame.
+            // been swapped for suresiez.
+            t = dtime();
+            if (tasting())
+                printf("Time since last frame: %5fms\n",
+                        (t - t_last_frame)*1000.);
+            t_last_frame = t;
+            
+            // Process events for T - 3ms, so that as many events as possible
+            // are used to determine the content of the next frame.
             if (tasting())
                 t = dtime();
             processEventsFor(T - 3e-3);
@@ -276,23 +285,14 @@ int main(int argc, char *argv[])
                 printf("processEventsFor takes %5fms.\n", (dtime() - t)*1000.);
 
             // We have awoken! It is only 3 milliseconds before the next vsync,
-            // and we have got a frame to render!
-            double t = dtime();
-            if (tasting())
-                printf("Time since last frame: %5fms\n",
-                        (t - t_last_frame)*1000.);
-            t_last_frame = t;
-
-            // Do all OpenGL drawing commands. 
+            // and we have got a frame to render!  Do all OpenGL drawing
+            // commands. 
             if (tasting())
                 t = dtime();
             draw();
             glFinish();
             if (tasting())
                 printf("Draw takes %5fms.\n", (dtime() - t)*1000.);
-
-
-            g_frame_counter++;
         }
     }
 
