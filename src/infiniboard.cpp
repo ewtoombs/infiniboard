@@ -23,9 +23,7 @@ enum {
     DRAW
 };
 
-GLuint attrib(void);
 void processEventsFor(double t);
-
 
 complex<float> screen_to_board(double x, double y);
 
@@ -37,26 +35,24 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 void cursor_position_callback(GLFWwindow *window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods);
-void draw();
+void draw(void);
 bool tasting(void);
 
 
 // Globals, prefixed with g_.
 GLFWwindow *g_window = NULL;
 unsigned g_nvertices = 0;
-GLuint g_background_program;
+GLuint g_background_vbo;
+
+GLuint g_poincare_program;
+GLuint g_pan_uni;
+GLuint g_position_attrib;
+
 complex<float> g_pan = 0.f;
 int g_tool = IDLE;
 unsigned char g_frame_counter = 0;
 
 
-GLuint attrib(void)
-{
-    static GLuint next = 0;
-    GLuint x = next;
-    next++;
-    return x;
-}
 // Process events for dt seconds, then return. Should almost always return in
 // exactly dt seconds.
 void processEventsFor(double dt)
@@ -135,53 +131,45 @@ bool init(void)
 // Initialises the generic OpenGL state.
 bool init_gl()
 {
-    //---- Make the background VBO and the containing vertex attribute array.
-    GLuint background_vbo;
-    glGenBuffers(1, &background_vbo);
-
-    // Make the new VBO active.
-    glBindBuffer(GL_ARRAY_BUFFER, background_vbo);
+    //---- Make the background VBO. ----
+    glGenBuffers(1, &g_background_vbo);
 
     // Make the vertex data.
     complex<float> *background_data;
     poincare::tiling(3, 7, 5, 6, &background_data, &g_nvertices);
 
     // Upload the vertex data in background_data to the video device.
+    glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
     glBufferData(GL_ARRAY_BUFFER, g_nvertices*sizeof(complex<float>),
             background_data, GL_STATIC_DRAW);
 
-    // Define a vertex attribute array as follows. Each element of the array is
-    // a 2-dimensional vector of GL_FLOATS. The underlying data is the
-    // currently bound buffer (background_vbo). Store this defining information
-    // in background_attrib. (The first unused index is returned by attrib().)
-    // These arrays are used as inputs for vertex shaders. Note this does not
-    // specify the size of the array.  That is done on every draw call instead.
-    GLuint background_attrib = attrib();
-    glVertexAttribPointer(background_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-    // background_vbo and background_attrib are ready. Unbind the VBO.
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-    // Make the attribute array background_attrib available to all shader
-    // programs that would link with it.
-    glEnableVertexAttribArray(background_attrib);
+    // g_background_vbo is ready.
 
 
-    //---- Create the shader program. ----
-    g_background_program = glCreateProgram();
+    //---- Create the poincare shader program. ----
+    g_poincare_program = glCreateProgram();
+    compile_shaders("glsl/poincare.vert", "glsl/white.frag",
+            g_poincare_program);
+    glLinkProgram(g_poincare_program);
 
-    // Pass background_attrib to the "position" input of the vertex shader.
-    // This will associate one 2-vector out of background_data with every
-    // vertex the vertex shader processes. That 2-vector gets accessed by the
-    // name "position". It could be any name or any data type. It is up to the
-    // vertex shader to figure out how to turn that data into a vertex
-    // position.
-    glBindAttribLocation(g_background_program, background_attrib, "position");
 
-    compile_shaders("glsl/poincare-pan.vert", "glsl/white.frag",
-            g_background_program);
+    // Use the poincare shader program in all subsequent draw calls.
+    glUseProgram(g_poincare_program);
 
-    glLinkProgram(g_background_program);
+    g_position_attrib =
+        glGetAttribLocation(g_poincare_program, "position");
+    // A program's vertex attribute arrays are disabled by default... wth...
+    // Well, enable them, then.
+    glEnableVertexAttribArray(g_position_attrib);
+
+    g_pan_uni = glGetUniformLocation(g_poincare_program, "pan");
+
+    // For all subsequent draw calls, pass SCREEN_RATIO into the uniform vertex
+    // shader input, screen_ratio.
+    glUniform1f(glGetUniformLocation(g_poincare_program, "screen_ratio"),
+            SCREEN_RATIO);
+    glUniform1f(glGetUniformLocation(g_poincare_program, "screen_zoom"),
+            SCREEN_ZOOM);
 
 
     // Set the colour to be used in all subsequent glClear(GL_COLOR_BUFFER_BIT)
@@ -189,20 +177,27 @@ bool init_gl()
     glClearColor(0, 0, 0, 1);
 
 
-    // Use our shader program in all subsequent draw calls.
-    glUseProgram(g_background_program);
-
-
-    // For all subsequent draw calls, pass SCREEN_RATIO into the uniform vertex
-    // shader input, screen_ratio.
-    glUniform1f(glGetUniformLocation(g_background_program, "screen_ratio"),
-            SCREEN_RATIO);
-    glUniform1f(glGetUniformLocation(g_background_program, "screen_zoom"),
-            SCREEN_ZOOM);
-
-
     return true;
 }
+
+// Per-frame actions.
+void draw(void)
+{
+    // Pass g_background_vbo to the "position" input of the vertex shader.
+    // This will associate one 2-vector out of background_data with every
+    // vertex the vertex shader processes. That 2-vector gets accessed by the
+    // name "position". It could be any name or any data type. It is up to the
+    // vertex shader to figure out how to turn that data into a vertex
+    // position.
+    glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
+    glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glUniform2f(g_pan_uni, real(g_pan), imag(g_pan));
+
+    // Draw with the active shader program and its current inputs.
+    glDrawArrays(GL_LINES, 0, g_nvertices);
+}
+
 
 void key_callback(GLFWwindow *window, int key, int scancode,
         int action, int mods)
@@ -231,16 +226,6 @@ void mouse_button_callback(GLFWwindow *window, int button,
     }
 }
 
-
-// Per-frame actions.
-void draw()
-{
-    glUniform2f(glGetUniformLocation(g_background_program, "pan"),
-            real(g_pan), imag(g_pan));
-
-    // Draw with the active shader.
-    glDrawArrays(GL_LINES, 0, g_nvertices);
-}
 
 // Give the stew a taste every once in a while.
 bool tasting(void)
@@ -277,24 +262,22 @@ int main(int argc, char *argv[])
             // almost always. This command is put here to ensure the buffers
             // are indeed swapped before continuing!
             glClear(GL_COLOR_BUFFER_BIT);
+            double t1 = dtime();
             if (tasting())
                 printf("Time waiting for vsync: %5fms.\n",
-                        (dtime() - t)*1000.);
-
+                        (t1 - t)*1000.);
+            if (tasting())
+                printf("Frame duration: %5fms\n\n",
+                        (t1 - t_last_frame)*1000.);
+            t_last_frame = t1;
             g_frame_counter++;
 
             //---------------- ***VSYNC*** ----------------
 
             // OK, the vsync has like /juuuust/ happened. The buffers have just
-            // been swapped for suresiez.
-            t = dtime();
-            if (tasting())
-                printf("Time since last frame: %5fms\n",
-                        (t - t_last_frame)*1000.);
-            t_last_frame = t;
-            
-            // Process events for T - t_draw, so that as many events as
-            // possible are used to determine the content of the next frame.
+            // been swapped for suresiez.  Process events for T - t_draw, so
+            // that as many events as possible are used to determine the
+            // content of the next frame.
             if (tasting())
                 t = dtime();
             processEventsFor(T - t_draw);
