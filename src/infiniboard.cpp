@@ -23,6 +23,10 @@ enum {
     DRAW
 };
 
+GLuint attrib(void);
+void processEventsFor(double t);
+
+
 complex<float> screen_to_board(double x, double y);
 
 void error_callback(int error, const char* description);
@@ -35,7 +39,6 @@ void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods);
 void draw();
 bool tasting(void);
-void processEventsFor(double t);
 
 
 // Globals, prefixed with g_.
@@ -45,6 +48,29 @@ GLuint g_background_program;
 complex<float> g_pan = 0.f;
 int g_tool = IDLE;
 unsigned char g_frame_counter = 0;
+
+
+GLuint attrib(void)
+{
+    static GLuint next = 0;
+    GLuint x = next;
+    next++;
+    return x;
+}
+// Process events for dt seconds, then return. Should almost always return in
+// exactly dt seconds.
+void processEventsFor(double dt)
+{
+    double t0 = glfwGetTime();
+    for (;;) {
+        glfwWaitEventsTimeout(dt);
+        double t1 = glfwGetTime();
+        double u = t1 - t0;
+        if (u >= dt)
+            return;
+        dt -= u;
+    }
+}
 
 
 // Convert from screen coordinates to (complex) board coordinates.
@@ -109,7 +135,7 @@ bool init(void)
 // Initialises the generic OpenGL state.
 bool init_gl()
 {
-    //---- Make the VBO and the containing vertex attribute array. ----
+    //---- Make the background VBO and the containing vertex attribute array.
     GLuint background_vbo;
     glGenBuffers(1, &background_vbo);
 
@@ -127,14 +153,18 @@ bool init_gl()
     // Define a vertex attribute array as follows. Each element of the array is
     // a 2-dimensional vector of GL_FLOATS. The underlying data is the
     // currently bound buffer (background_vbo). Store this defining information
-    // in background_attrib (index 0). These arrays are used as inputs and
-    // outputs for vertex shaders. Note this does not specify the size of the
-    // array. That is done on every draw call instead.
-    const unsigned int background_attrib = 0;
+    // in background_attrib. (The first unused index is returned by attrib().)
+    // These arrays are used as inputs for vertex shaders. Note this does not
+    // specify the size of the array.  That is done on every draw call instead.
+    GLuint background_attrib = attrib();
     glVertexAttribPointer(background_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
     // background_vbo and background_attrib are ready. Unbind the VBO.
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // Make the attribute array background_attrib available to all shader
+    // programs that would link with it.
+    glEnableVertexAttribArray(background_attrib);
 
 
     //---- Create the shader program. ----
@@ -159,13 +189,7 @@ bool init_gl()
     glClearColor(0, 0, 0, 1);
 
 
-    // Use the new VBO in subsequent draw calls.
-    glBindBuffer(GL_ARRAY_BUFFER, background_vbo);
-
-    // Enable attribute index 0(background_attrib) as being used
-    glEnableVertexAttribArray(background_attrib);
-
-    // Use our shader in all subsequent draw calls.
+    // Use our shader program in all subsequent draw calls.
     glUseProgram(g_background_program);
 
 
@@ -222,20 +246,6 @@ void draw()
 bool tasting(void)
 {
     return g_frame_counter == 0;
-}
-// Process events for dt seconds, then return. Should almost always return in
-// exactly dt seconds.
-void processEventsFor(double dt)
-{
-    double t0 = glfwGetTime();
-    for (;;) {
-        glfwWaitEventsTimeout(dt);
-        double t1 = glfwGetTime();
-        double u = t1 - t0;
-        if (u >= dt)
-            return;
-        dt -= u;
-    }
 }
 int main(int argc, char *argv[])
 {
