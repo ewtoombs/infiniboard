@@ -17,6 +17,12 @@
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
 
+enum {
+    IDLE,
+    PAN,
+    DRAW
+};
+
 complex<float> screen_to_board(double x, double y);
 
 void error_callback(int error, const char* description);
@@ -37,7 +43,7 @@ GLFWwindow *g_window = NULL;
 unsigned g_nvertices = 0;
 GLuint g_background_program;
 complex<float> g_pan = 0.f;
-bool g_panning = false;
+int g_tool = IDLE;
 unsigned char g_frame_counter = 0;
 
 
@@ -182,22 +188,22 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 }
 void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 {
-    if (g_panning)
+    if (g_tool == PAN)
         g_pan = screen_to_board(xpos, ypos);
 }
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods)
 {
-    if (!g_panning) {
-        if (action == GLFW_PRESS) {
-            g_panning = true;
+    if (g_tool == IDLE) {
+        if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_MIDDLE) {
+            g_tool = PAN;
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
             g_pan = screen_to_board(xpos, ypos);
         }
     } else {
         if (action == GLFW_RELEASE)
-            g_panning = false;
+            g_tool = IDLE;
     }
 }
 

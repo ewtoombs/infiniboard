@@ -38,6 +38,7 @@ list.
 
 * drawing
 * interpolate drawn segments with some sexy cubic splines.
+* handle point and 2-vertex line special cases.
 * undo
 * erase of every segment in the path of a point cursor
 * clipped erase of everything under a finite-area erase cursor of variable
