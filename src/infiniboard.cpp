@@ -112,7 +112,7 @@ bool init_gl()
 
     // Make the vertex data.
     complex<float> *background_data;
-    poincare::tiling(4, 5, 5, 4, &background_data, &g_nvertices);
+    poincare::tiling(3, 7, 5, 6, &background_data, &g_nvertices);
 
     // Upload the vertex data in background_data to the video device.
     glBufferData(GL_ARRAY_BUFFER, g_nvertices*sizeof(complex<float>),
@@ -245,6 +245,7 @@ int main(int argc, char *argv[])
 
         double t_last_frame = dtime();
         while (!glfwWindowShouldClose(g_window)) {  // once per frame.
+            double t_draw = 4e-3;
             double t;
             if (tasting())
                 t = dtime();
@@ -276,16 +277,16 @@ int main(int argc, char *argv[])
                         (t - t_last_frame)*1000.);
             t_last_frame = t;
             
-            // Process events for T - 3ms, so that as many events as possible
-            // are used to determine the content of the next frame.
+            // Process events for T - t_draw, so that as many events as
+            // possible are used to determine the content of the next frame.
             if (tasting())
                 t = dtime();
-            processEventsFor(T - 3e-3);
+            processEventsFor(T - t_draw);
             if (tasting())
                 printf("processEventsFor takes %5fms.\n", (dtime() - t)*1000.);
 
-            // We have awoken! It is only 3 milliseconds before the next vsync,
-            // and we have got a frame to render!  Do all OpenGL drawing
+            // We have awoken! It is only t_draw seconds before the next
+            // vsync, and we have got a frame to render!  Do all OpenGL drawing
             // commands. 
             if (tasting())
                 t = dtime();

@@ -32,11 +32,10 @@ Besides that, it's really just a regular blackboard.
 Unless you would brave a taste test. But mostly, don't complain that it doesn't
 work, because that isn't news to me. Right now, it's just a pannable
 background.  Drawing has not been implemented yet.  This is next on my todo
-list after I take care of some dirty edge cases in the background drawing.
+list.
 
 ## TODO:
 
-* dirty background edge cases
 * drawing
 * interpolate drawn segments with some sexy cubic splines.
 * undo
