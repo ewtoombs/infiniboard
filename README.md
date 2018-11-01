@@ -27,18 +27,15 @@ implemented with glfw, so it should Just Work™. Testers are welcome.
 
 Besides that, it's really just a regular blackboard.
 
-## It's not ready yet! Don't eat it! Get out of the kitchen!
+## It's still a little raw
 
-Unless you would brave a taste test. But mostly, don't complain that it doesn't
-work, because that isn't news to me. Right now, it's just a pannable
-background.  Drawing has not been implemented yet.  This is next on my todo
-list.
+Right now, it's just basic drawing on a pannable background.  Interpolation has
+not been implemented yet and there's no undo button. Both are on the todo list.
 
 ## TODO:
 
-* drawing
 * interpolate drawn segments with some sexy cubic splines.
-* handle point and 2-vertex line special cases.
+* handle 2-vertex line special case.
 * undo
 * erase of every segment in the path of a point cursor
 * clipped erase of everything under a finite-area erase cursor of variable
@@ -53,9 +50,9 @@ list.
 * quantify mouse to screen response
 * scons debug=0 is spectacularly broken in multiple ways
 * touch screens and smart boards, pending acquisition of capable hardware.
-* vulkan, pending acquisition of vulkan-capable hardware. If this ever
-  *actually* happens, support for OpenGL and its perpetually-broken-ass self
-  will probably be dropped.
+* vulkan, pending acquisition of capable hardware. If this ever *actually*
+  happens, support for OpenGL and its perpetually-broken-ass self will probably
+  be dropped.
 * rust rewrite, pending vulkan and the arrival of some definitely-not-broken
   vulkan and glfw bindings for rust. Because holy actual shit, C is terrible.
   But there are worse things than C and one of them is debugging broken vulkan

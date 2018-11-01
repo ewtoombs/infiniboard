@@ -1,6 +1,7 @@
 // vi:fo=qacj com=b\://
 
 #include <stdio.h>
+#include <assert.h>
 
 #include <GL/glew.h>  // needed for shaders and shit.
 #include <GLFW/glfw3.h>
@@ -35,21 +36,29 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 void cursor_position_callback(GLFWwindow *window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods);
-void draw(void);
+void draw_to_foreground(complex<float> p0, complex<float> p1);
+void render(void);
 bool tasting(void);
 
 
 // Globals, prefixed with g_.
 GLFWwindow *g_window = NULL;
-unsigned g_nvertices = 0;
+
+unsigned g_background_len;
 GLuint g_background_vbo;
+
+GLuint g_foreground_vbo;
+unsigned g_foreground_len = 0;
+unsigned g_foreground_max = 16*0x100000/sizeof(complex<float>);
 
 GLuint g_poincare_program;
 GLuint g_pan_uni;
 GLuint g_position_attrib;
 
-complex<float> g_pan = 0.f;
 int g_tool = IDLE;
+complex<float> g_pan = 0.f;
+complex<float> g_draw_p0;
+
 unsigned char g_frame_counter = 0;
 
 
@@ -79,12 +88,12 @@ complex<float> screen_to_board(double x, double y)
         ) / ((float)SCREEN_HEIGHT/2.f) / SCREEN_ZOOM;
 }
 
-// Starts up glfw, creates window, and initialises the glfw- and
-// vendor-specific OpenGL state.
 void error_callback(int error, const char *description)
 {
     fprintf(stderr, "Error: %s\n", description);
 }
+// Starts up glfw, creates window, and initialises the glfw- and
+// vendor-specific OpenGL state.
 bool init(void)
 {
     glfwSetErrorCallback(error_callback);
@@ -136,14 +145,19 @@ bool init_gl()
 
     // Make the vertex data.
     complex<float> *background_data;
-    poincare::tiling(3, 7, 5, 6, &background_data, &g_nvertices);
+    poincare::tiling(3, 7, 5, 6, &background_data, &g_background_len);
 
     // Upload the vertex data in background_data to the video device.
     glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
-    glBufferData(GL_ARRAY_BUFFER, g_nvertices*sizeof(complex<float>),
+    glBufferData(GL_ARRAY_BUFFER, g_background_len*sizeof(complex<float>),
             background_data, GL_STATIC_DRAW);
 
     // g_background_vbo is ready.
+
+    glGenBuffers(1, &g_foreground_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
+    glBufferData(GL_ARRAY_BUFFER, g_foreground_max*sizeof(complex<float>),
+            NULL, GL_DYNAMIC_DRAW);
 
 
     //---- Create the poincare shader program. ----
@@ -181,8 +195,10 @@ bool init_gl()
 }
 
 // Per-frame actions.
-void draw(void)
+void render(void)
 {
+    glUniform2f(g_pan_uni, real(g_pan), imag(g_pan));
+
     // Pass g_background_vbo to the "position" input of the vertex shader.
     // This will associate one 2-vector out of background_data with every
     // vertex the vertex shader processes. That 2-vector gets accessed by the
@@ -192,10 +208,12 @@ void draw(void)
     glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
     glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
-    glUniform2f(g_pan_uni, real(g_pan), imag(g_pan));
-
     // Draw with the active shader program and its current inputs.
-    glDrawArrays(GL_LINES, 0, g_nvertices);
+    glDrawArrays(GL_LINES, 0, g_background_len);
+
+    glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
+    glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glDrawArrays(GL_LINES, 0, g_foreground_len);
 }
 
 
@@ -209,6 +227,11 @@ void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 {
     if (g_tool == PAN)
         g_pan = screen_to_board(xpos, ypos);
+    else if (g_tool == DRAW) {
+        complex<float> p1 = screen_to_board(xpos, ypos);
+        draw_to_foreground(g_draw_p0, p1);
+        g_draw_p0 = p1;
+    }
 }
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods)
@@ -220,10 +243,38 @@ void mouse_button_callback(GLFWwindow *window, int button,
             glfwGetCursorPos(window, &xpos, &ypos);
             g_pan = screen_to_board(xpos, ypos);
         }
-    } else {
-        if (action == GLFW_RELEASE)
+        if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
+            g_tool = DRAW;
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            g_draw_p0 = screen_to_board(xpos, ypos);
+        }
+    } else if (g_tool == PAN) {
+        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_MIDDLE)
             g_tool = IDLE;
+    } else if (g_tool == DRAW) {
+        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            draw_to_foreground(g_draw_p0, screen_to_board(xpos, ypos));
+            g_tool = IDLE;
+        }
     }
+}
+void draw_to_foreground(complex<float> p0, complex<float> p1)
+{
+    assert(g_foreground_len + 2 <= g_foreground_max);
+
+    complex<float> v[] = {
+            poincare::S(-g_pan, p0),
+            poincare::S(-g_pan, p1)
+        };
+
+    glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, g_foreground_len*sizeof(complex<float>),
+            sizeof(v), v);
+
+    g_foreground_len += 2;
 }
 
 
@@ -289,7 +340,7 @@ int main(int argc, char *argv[])
             // commands. 
             if (tasting())
                 t = dtime();
-            draw();
+            render();
             glFinish();
             if (tasting())
                 printf("Draw takes %5fms.\n", (dtime() - t)*1000.);
