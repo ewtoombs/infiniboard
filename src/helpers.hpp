@@ -38,8 +38,7 @@ char *load(const char *fn);
 #endif
 void _gl_assert(const char *file, unsigned int line, const char *function);
 
-void compile_shaders(const char *vertfile, const char *fragfile,
-        GLuint shader_program);
+GLuint shader_program(const char *vertfile, const char *fragfile);
 
 complex<float> *linspacecf(complex<float> a, complex<float> b, unsigned N);
 void line_strip_to_lines(complex<float> *x, unsigned n,

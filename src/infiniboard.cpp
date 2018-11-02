@@ -160,11 +160,8 @@ bool init_gl()
             NULL, GL_DYNAMIC_DRAW);
 
 
-    //---- Create the poincare shader program. ----
-    g_poincare_program = glCreateProgram();
-    compile_shaders("glsl/poincare.vert", "glsl/white.frag",
-            g_poincare_program);
-    glLinkProgram(g_poincare_program);
+    g_poincare_program = shader_program(
+            "glsl/poincare.vert", "glsl/white.frag");
 
 
     // Use the poincare shader program in all subsequent draw calls.
@@ -285,19 +282,17 @@ bool tasting(void)
 }
 int main(int argc, char *argv[])
 {
-    cout.precision(16);  // Show me all of the digits by default.
-
     // Start up glfw and create window.
     if (!init()) {
         printf("Failed to initialise!\n");
     } else {
         const GLFWvidmode *m = glfwGetVideoMode(glfwGetPrimaryMonitor());
         double T = 1. / (double)m->refreshRate;
-        printf("T = %5fms\n", T*1000.);
+        printf("T = %.3fms\n", T*1000.);
 
         double t_last_frame = glfwGetTime();
         while (!glfwWindowShouldClose(g_window)) {  // once per frame.
-            double t_draw = 4e-3;
+            double t_draw = 3.5e-3;
             double t;
             if (tasting())
                 t = glfwGetTime();
@@ -315,10 +310,10 @@ int main(int argc, char *argv[])
             glClear(GL_COLOR_BUFFER_BIT);
             double t1 = glfwGetTime();
             if (tasting())
-                printf("Time waiting for vsync: %5fms.\n",
+                printf("Time waiting for vsync: %.3fms.\n",
                         (t1 - t)*1000.);
             if (tasting())
-                printf("Frame duration: %5fms\n\n",
+                printf("Frame duration: %.3fms\n\n",
                         (t1 - t_last_frame)*1000.);
             t_last_frame = t1;
             g_frame_counter++;
@@ -333,7 +328,7 @@ int main(int argc, char *argv[])
                 t = glfwGetTime();
             processEventsFor(T - t_draw);
             if (tasting())
-                printf("processEventsFor takes %5fms.\n", (glfwGetTime() - t)*1000.);
+                printf("processEventsFor takes %.3fms.\n", (glfwGetTime() - t)*1000.);
 
             // We have awoken! It is only t_draw seconds before the next
             // vsync, and we have got a frame to render!  Do all OpenGL drawing
@@ -343,7 +338,7 @@ int main(int argc, char *argv[])
             render();
             glFinish();
             if (tasting())
-                printf("Draw takes %5fms.\n", (glfwGetTime() - t)*1000.);
+                printf("Draw takes %.3fms.\n", (glfwGetTime() - t)*1000.);
         }
     }
 

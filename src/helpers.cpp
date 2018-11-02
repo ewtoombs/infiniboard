@@ -134,11 +134,13 @@ static void compile_shader(GLenum type, const char *filename,
 
 // Compile the vertex shader named "vertfile" and the fragment shader named
 // "fragfile". Attach both to shader_program.
-void compile_shaders(const char *vertfile, const char *fragfile,
-        GLuint shader_program)
+GLuint shader_program(const char *vertfile, const char *fragfile)
 {
-    compile_shader(GL_VERTEX_SHADER, vertfile, shader_program);
-    compile_shader(GL_FRAGMENT_SHADER, fragfile, shader_program);
+    GLuint p = glCreateProgram();
+    compile_shader(GL_VERTEX_SHADER, vertfile, p);
+    compile_shader(GL_FRAGMENT_SHADER, fragfile, p);
+    glLinkProgram(p);
+    return p;
 }
 
 complex<float> *linspacecf(complex<float> a, complex<float> b, unsigned N)
