@@ -64,7 +64,8 @@ char *load(const char *fn)
 
     off_t size = lseek(fd, 0, SEEK_END);
     assert(size != -1);
-    assert(lseek(fd, 0, SEEK_SET) != -1);
+    off_t res = lseek(fd, 0, SEEK_SET);
+    assert(res != -1);
 
     size++;  // null terminator
     char *buf = (char *)malloc(size);
@@ -86,7 +87,8 @@ char *load(const char *fn)
 
         p += nread;
     }
-    assert(close(fd) == 0);
+    int res = close(fd);
+    assert(res == 0);
 
     return buf;
 }
@@ -176,7 +178,8 @@ double timespec_to_d(struct timespec *ts)
 double dtime(void)
 {
     struct timespec ts;
-    assert(clock_gettime(CLOCK_MONOTONIC, &ts) == 0);
+    int res = clock_gettime(CLOCK_MONOTONIC, &ts);
+    assert(res == 0);
     return timespec_to_d(&ts);
 }
 
@@ -184,7 +187,8 @@ void dsleep(double t)
 {
     struct timespec ts;
     d_to_timespec(t, &ts);
-    assert(clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL) == 0);
+    int res = clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
+    assert(res == 0);
 }
 
 
@@ -199,7 +203,8 @@ timer_t create_callback_timer(void (*callback)(void *), void *data)
 
     timer_t timer;
 
-    assert(timer_create(CLOCK_MONOTONIC, &se, &timer) == 0);
+    int res = timer_create(CLOCK_MONOTONIC, &se, &timer);
+    assert(res == 0);
 
     return timer;
 }
@@ -209,5 +214,6 @@ void timer_settime_d(timer_t timer, double t)
     its.it_interval.tv_sec = 0;
     its.it_interval.tv_nsec = 0;
     d_to_timespec(t, &its.it_value);
-    assert(timer_settime(timer, 0, &its, NULL) == 0);
+    int res = timer_settime(timer, 0, &its, NULL);
+    assert(res == 0);
 }
