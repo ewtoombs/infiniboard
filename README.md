@@ -38,6 +38,7 @@ With that in mind,
 * glfw
 * glew
 * OpenGL >= 2.1
+* g++
 * scons
 
 ## INSTALLING
