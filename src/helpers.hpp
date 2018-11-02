@@ -30,14 +30,6 @@ float pown(float x, unsigned n);
 float pown_l(float x, unsigned n);
 char *load(const char *fn);
 
-void d_to_timespec(double t, struct timespec *ts);
-double timespec_to_d(struct timespec *ts);
-double dtime(void);
-void dsleep(double t);
-timer_t create_callback_timer(void (*callback)(void *), void *data);
-void timer_settime_d(timer_t timer, double t);
-
-
 #ifdef	NDEBUG
 # define gl_assert() ((void) (0))
 #else

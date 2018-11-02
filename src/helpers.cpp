@@ -4,8 +4,6 @@
 #include <assert.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <time.h>
-#include <signal.h>
 
 #include <complex>
 #include <cmath>
@@ -81,14 +79,16 @@ char *load(const char *fn)
             break;
         }
 
+#ifndef NDEBUG
         // Null character? Fuck that shit.
         void *nullbyte = memchr((char *)p, '\0', nread);
         assert(nullbyte == NULL);
+#endif
 
         p += nread;
     }
-    int res = close(fd);
-    assert(res == 0);
+    int cres = close(fd);
+    assert(cres == 0);
 
     return buf;
 }
@@ -162,58 +162,4 @@ void line_strip_to_lines(complex<float> *x, unsigned n,
     }
     *py = y;
     *pny = ny;
-}
-
-void d_to_timespec(double t, struct timespec *ts)
-{
-    ts->tv_sec = (time_t)(floor(t));
-    ts->tv_nsec = (long)(t*1e9) % (1000*1000*1000);
-}
-
-double timespec_to_d(struct timespec *ts)
-{
-    return (double)ts->tv_sec + 1e-9*(double)ts->tv_nsec;
-}
-
-double dtime(void)
-{
-    struct timespec ts;
-    int res = clock_gettime(CLOCK_MONOTONIC, &ts);
-    assert(res == 0);
-    return timespec_to_d(&ts);
-}
-
-void dsleep(double t)
-{
-    struct timespec ts;
-    d_to_timespec(t, &ts);
-    int res = clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
-    assert(res == 0);
-}
-
-
-timer_t create_callback_timer(void (*callback)(void *), void *data)
-{
-    struct sigevent se;
-    se.sigev_notify = SIGEV_THREAD;
-    se.sigev_signo = 0;
-    se.sigev_value.sival_ptr = data;
-    se.sigev_notify_function = (void (*)(union sigval))callback;
-    se.sigev_notify_attributes = NULL;
-
-    timer_t timer;
-
-    int res = timer_create(CLOCK_MONOTONIC, &se, &timer);
-    assert(res == 0);
-
-    return timer;
-}
-void timer_settime_d(timer_t timer, double t)
-{
-    struct itimerspec its;
-    its.it_interval.tv_sec = 0;
-    its.it_interval.tv_nsec = 0;
-    d_to_timespec(t, &its.it_value);
-    int res = timer_settime(timer, 0, &its, NULL);
-    assert(res == 0);
 }

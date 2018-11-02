@@ -48,7 +48,6 @@ not been implemented yet and there's no undo button. Both are on the todo list.
   infinite, and to avert floating-point badness at great distances away from
   the origin.
 * quantify mouse to screen response
-* scons debug=0 is spectacularly broken in multiple ways
 * touch screens and smart boards, pending acquisition of capable hardware.
 * vulkan, pending acquisition of capable hardware. If this ever *actually*
   happens, support for OpenGL and its perpetually-broken-ass self will probably

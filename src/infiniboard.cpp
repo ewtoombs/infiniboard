@@ -295,12 +295,12 @@ int main(int argc, char *argv[])
         double T = 1. / (double)m->refreshRate;
         printf("T = %5fms\n", T*1000.);
 
-        double t_last_frame = dtime();
+        double t_last_frame = glfwGetTime();
         while (!glfwWindowShouldClose(g_window)) {  // once per frame.
             double t_draw = 4e-3;
             double t;
             if (tasting())
-                t = dtime();
+                t = glfwGetTime();
             // Tell OpenGL that all subsequent OpenGL commands are to happen
             // after the next buffer swap. This will almost never actually swap
             // the buffers, and in fact, will return immediately, no matter
@@ -313,7 +313,7 @@ int main(int argc, char *argv[])
             // almost always. This command is put here to ensure the buffers
             // are indeed swapped before continuing!
             glClear(GL_COLOR_BUFFER_BIT);
-            double t1 = dtime();
+            double t1 = glfwGetTime();
             if (tasting())
                 printf("Time waiting for vsync: %5fms.\n",
                         (t1 - t)*1000.);
@@ -330,20 +330,20 @@ int main(int argc, char *argv[])
             // that as many events as possible are used to determine the
             // content of the next frame.
             if (tasting())
-                t = dtime();
+                t = glfwGetTime();
             processEventsFor(T - t_draw);
             if (tasting())
-                printf("processEventsFor takes %5fms.\n", (dtime() - t)*1000.);
+                printf("processEventsFor takes %5fms.\n", (glfwGetTime() - t)*1000.);
 
             // We have awoken! It is only t_draw seconds before the next
             // vsync, and we have got a frame to render!  Do all OpenGL drawing
             // commands. 
             if (tasting())
-                t = dtime();
+                t = glfwGetTime();
             render();
             glFinish();
             if (tasting())
-                printf("Draw takes %5fms.\n", (dtime() - t)*1000.);
+                printf("Draw takes %5fms.\n", (glfwGetTime() - t)*1000.);
         }
     }
 

@@ -11,7 +11,3 @@ env.Program('load_test', ['load_test.cpp', helpers],
         LIBS=env.libs)
 env.Program('line_strip_to_lines_test', ['line_strip_to_lines_test.cpp',
         helpers], LIBS=env.libs)
-env.Program('dtime_test', ['dtime_test.cpp',
-        helpers], LIBS=env.libs)
-env.Program('timer_test', ['timer_test.cpp',
-        helpers], LIBS=env.libs)
