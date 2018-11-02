@@ -31,6 +31,20 @@ Besides that, it's really just a regular blackboard.
 
 Right now, it's just basic drawing on a pannable background.  Interpolation has
 not been implemented yet and there's no undo button. Both are on the todo list.
+With that in mind,
+
+## PREREQUISITES
+
+* glfw
+* glew
+* OpenGL >= 2.1
+* scons
+
+## INSTALLING
+
+There is no mechanism for system-wide installation right now. To compile and
+run it, in the root directory, run `scons && build/infiniboard`. To compile an
+optimised build, run `scons debug=0`.
 
 ## TODO:
 
