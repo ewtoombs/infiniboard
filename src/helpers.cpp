@@ -132,8 +132,8 @@ static void compile_shader(GLenum type, const char *filename,
     glAttachShader(shader_program, shader);
 }
 
-// Compile the vertex shader named "vertfile" and the fragment shader named
-// "fragfile". Attach both to shader_program.
+// Return a shader program with vertex shader "vertfile" and the fragment
+// shader "fragfile".
 GLuint shader_program(const char *vertfile, const char *fragfile)
 {
     GLuint p = glCreateProgram();
