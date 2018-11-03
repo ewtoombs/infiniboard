@@ -16,7 +16,11 @@
 #define SCREEN_HEIGHT 600
 #define SCREEN_ZOOM 0.99f
 
+// 16 MiB of space for drawing in should be fine until I can work out the
+// details of memory management.
+#define DRAW_SPACE (16*MiB)
 #define LINE_WIDTH 0.02f
+#define DRAW_CRIT_ANGLE ((float)TAU / 16.f)
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
 
@@ -54,7 +58,7 @@ GLuint g_background_vbo;
 
 GLuint g_foreground_vbo;
 unsigned g_foreground_len = 0;
-unsigned g_foreground_max = 16*0x100000/sizeof(complex<float>);
+unsigned g_foreground_max = DRAW_SPACE/sizeof(complex<float>);
 
 GLuint g_poincare_program;
 GLuint g_pan_uni;
@@ -296,7 +300,7 @@ void mouse_draw_start(complex<float> p0, complex<float> p1)
             poincare::S(-g_pan, p0 - u),
             poincare::S(-g_pan, p0 + u),
             poincare::S(-g_pan, p1 - u),
-            poincare::S(-g_pan, p1 + u)
+            poincare::S(-g_pan, p1 + u),
         };
 
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
@@ -308,32 +312,60 @@ void mouse_draw_start(complex<float> p0, complex<float> p1)
 }
 void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
 {
-    assert(g_foreground_len + 2 <= g_foreground_max);
-
     complex<float> a = p1 - p0, b = p2 - p1;
     a /= abs(a);
     b /= abs(b);
-    complex<float> c = a + b;
-    // norm(c) = |c|^2. Yeah, I know. Fuck you, C++.
-    complex<float> d = LINE_WIDTH * 1if*c/norm(c);
 
-    complex<float> u = LINE_WIDTH/2 * 1if*b;
+    if (real(a)*real(b) + imag(a)*imag(b) < -cos(DRAW_CRIT_ANGLE)) {
+        assert(g_foreground_len + 3 <= g_foreground_max);
 
-    complex<float> v[] = {
-            poincare::S(-g_pan, p1 - d),
-            poincare::S(-g_pan, p1 + d),
-            poincare::S(-g_pan, p2 - u),
-            poincare::S(-g_pan, p2 + u),
-        };
+        complex<float> c = a - b;
+        // norm(c) = |c|^2. Yeah, I know. Fuck you, C++.
+        complex<float> d = LINE_WIDTH * 1if*c/norm(c);
 
-    // Erase the cap from the previous run.
-    glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
-    glBufferSubData(GL_ARRAY_BUFFER,
-            (g_foreground_len - 2)*sizeof(complex<float>), sizeof(v), v);
+        complex<float> u = LINE_WIDTH/2 * 1if*b;
 
-    g_draw_last = v[3];
-    // g_foreground is only 2 vertices longer.
-    g_foreground_len += 2;
+        complex<float> v[] = {
+                poincare::S(-g_pan, p1 - d),
+                poincare::S(-g_pan, p1 + d),
+                poincare::S(-g_pan, p1 - d),
+                poincare::S(-g_pan, p2 - u),
+                poincare::S(-g_pan, p2 + u),
+            };
+
+        // Erase the cap from the previous run.
+        glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
+        glBufferSubData(GL_ARRAY_BUFFER,
+                (g_foreground_len - 2)*sizeof(complex<float>), sizeof(v), v);
+
+        g_draw_last = v[4];
+        // g_foreground is only 2 vertices longer.
+        g_foreground_len += 3;
+    } else {
+        assert(g_foreground_len + 2 <= g_foreground_max);
+
+        complex<float> c = a + b;
+        // norm(c) = |c|^2. Yeah, I know. Fuck you, C++.
+        complex<float> d = LINE_WIDTH * 1if*c/norm(c);
+
+        complex<float> u = LINE_WIDTH/2 * 1if*b;
+
+        complex<float> v[] = {
+                poincare::S(-g_pan, p1 - d),
+                poincare::S(-g_pan, p1 + d),
+                poincare::S(-g_pan, p2 - u),
+                poincare::S(-g_pan, p2 + u),
+            };
+
+        // Erase the cap from the previous run.
+        glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
+        glBufferSubData(GL_ARRAY_BUFFER,
+                (g_foreground_len - 2)*sizeof(complex<float>), sizeof(v), v);
+
+        g_draw_last = v[3];
+        // g_foreground is only 2 vertices longer.
+        g_foreground_len += 2;
+    }
 }
 void mouse_draw_finish(void)
 {
@@ -365,7 +397,7 @@ int main(int argc, char *argv[])
 
         double t_last_frame = glfwGetTime();
         while (!glfwWindowShouldClose(g_window)) {  // once per frame.
-            double t_draw = 3.5e-3;
+            double t_draw = 4e-3;
             double t;
             if (tasting())
                 t = glfwGetTime();

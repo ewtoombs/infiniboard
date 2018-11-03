@@ -9,6 +9,7 @@
 #include <GLFW/glfw3.h>
 
 #define TAU 6.283185307179586
+#define MiB 0x100000
 
 #include <iostream>
 #define print(x) cout << x << '\n'
