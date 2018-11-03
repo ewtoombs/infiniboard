@@ -20,7 +20,7 @@
 // details of memory management.
 #define DRAW_SPACE (16*MiB)
 #define LINE_WIDTH 0.02f
-#define DRAW_CRIT_ANGLE ((float)TAU / 16.f)
+#define DRAW_CRIT_ANGLE ((float)TAU / 8.f)
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
 
