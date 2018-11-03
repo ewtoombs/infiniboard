@@ -16,11 +16,14 @@
 #define SCREEN_HEIGHT 600
 #define SCREEN_ZOOM 0.99f
 
+#define LINE_WIDTH 0.05f
+
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
 
 enum {
     IDLE,
     PAN,
+    DRAW_START,
     DRAW
 };
 
@@ -36,7 +39,9 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 void cursor_position_callback(GLFWwindow *window, double xpos, double ypos);
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods);
-void draw_to_foreground(complex<float> p0, complex<float> p1);
+void mouse_draw_start(complex<float> p0, complex<float> p1);
+void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2);
+void mouse_draw_finish(void);
 void render(void);
 bool tasting(void);
 
@@ -55,9 +60,11 @@ GLuint g_poincare_program;
 GLuint g_pan_uni;
 GLuint g_position_attrib;
 
-int g_tool = IDLE;
+int g_mouse_state = IDLE;
 complex<float> g_pan = 0.f;
 complex<float> g_draw_p0;
+complex<float> g_draw_p1;
+complex<float> g_draw_last;
 
 unsigned char g_frame_counter = 0;
 
@@ -196,21 +203,21 @@ void render(void)
 {
     glUniform2f(g_pan_uni, real(g_pan), imag(g_pan));
 
-    // Pass g_background_vbo to the "position" input of the vertex shader.
-    // This will associate one 2-vector out of background_data with every
-    // vertex the vertex shader processes. That 2-vector gets accessed by the
-    // name "position". It could be any name or any data type. It is up to the
-    // vertex shader to figure out how to turn that data into a vertex
-    // position.
     glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
+    // Pass the currently bound VBO (g_background_vbo) to the "position" input
+    // of the vertex shader.  This will associate one 2-vector out of
+    // background_data with every vertex the vertex shader processes. That
+    // 2-vector gets accessed by the name "position". It could be any name or
+    // any data type.  It is up to the vertex shader to figure out how to turn
+    // that data into a vertex position.
     glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
-    // Draw with the active shader program and its current inputs.
+    // Draw lines with the active shader program and its current inputs.
     glDrawArrays(GL_LINES, 0, g_background_len);
 
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
-    glDrawArrays(GL_LINES, 0, g_foreground_len);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, g_foreground_len);
 }
 
 
@@ -222,56 +229,120 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 }
 void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 {
-    if (g_tool == PAN)
+    complex<float> p1, p2;
+    switch (g_mouse_state) {
+    case PAN:
         g_pan = screen_to_board(xpos, ypos);
-    else if (g_tool == DRAW) {
-        complex<float> p1 = screen_to_board(xpos, ypos);
-        draw_to_foreground(g_draw_p0, p1);
-        g_draw_p0 = p1;
+        break;
+    case DRAW_START:
+        p1 = screen_to_board(xpos, ypos);
+        mouse_draw_start(g_draw_p0, p1);
+        g_draw_p1 = p1;
+        g_mouse_state = DRAW;
+        break;
+    case DRAW:
+        p2 = screen_to_board(xpos, ypos);
+        mouse_draw(g_draw_p0, g_draw_p1, p2);
+        g_draw_p0 = g_draw_p1;
+        g_draw_p1 = p2;
+        break;
     }
 }
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods)
 {
-    if (g_tool == IDLE) {
+    switch (g_mouse_state) {
+    case IDLE:
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_MIDDLE) {
-            g_tool = PAN;
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
             g_pan = screen_to_board(xpos, ypos);
+            g_mouse_state = PAN;
         }
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
-            g_tool = DRAW;
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
             g_draw_p0 = screen_to_board(xpos, ypos);
+            g_mouse_state = DRAW_START;
         }
-    } else if (g_tool == PAN) {
+        break;
+    case PAN:
         if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_MIDDLE)
-            g_tool = IDLE;
-    } else if (g_tool == DRAW) {
+            g_mouse_state = IDLE;
+        break;
+    case DRAW_START:
+        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT)
+            g_mouse_state = IDLE;
+        break;
+    case DRAW:
         if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
-            draw_to_foreground(g_draw_p0, screen_to_board(xpos, ypos));
-            g_tool = IDLE;
+            mouse_draw_finish();
+            g_mouse_state = IDLE;
         }
+        break;
     }
 }
-void draw_to_foreground(complex<float> p0, complex<float> p1)
+void mouse_draw_start(complex<float> p0, complex<float> p1)
 {
-    assert(g_foreground_len + 2 <= g_foreground_max);
+    assert(g_foreground_len + 4 <= g_foreground_max);
+
+    complex<float> a = p1 - p0;
+    complex<float> u = LINE_WIDTH/2 * 1if*a/abs(a);
 
     complex<float> v[] = {
-            poincare::S(-g_pan, p0),
-            poincare::S(-g_pan, p1)
+            poincare::S(-g_pan, p0 - u),
+            poincare::S(-g_pan, p0 - u),
+            poincare::S(-g_pan, p0 + u),
+            poincare::S(-g_pan, p1 - u),
+            poincare::S(-g_pan, p1 + u)
         };
 
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glBufferSubData(GL_ARRAY_BUFFER, g_foreground_len*sizeof(complex<float>),
             sizeof(v), v);
 
+    g_draw_last = v[3];
+    g_foreground_len += 4;
+}
+void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
+{
+    assert(g_foreground_len + 2 <= g_foreground_max);
+
+    complex<float> a = p1 - p0, b = p2 - p1;
+    a /= abs(a);
+    b /= abs(b);
+    complex<float> c = a + b;
+    // norm(c) = |c|^2. Yeah, I know. Fuck you, C++.
+    complex<float> d = LINE_WIDTH * 1if*c/norm(c);
+
+    complex<float> u = LINE_WIDTH/2 * 1if*b;
+
+    complex<float> v[] = {
+            poincare::S(-g_pan, p1 - d),
+            poincare::S(-g_pan, p1 + d),
+            poincare::S(-g_pan, p2 - u),
+            poincare::S(-g_pan, p2 + u),
+        };
+
+    // Erase the cap from the previous run.
+    glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
+    glBufferSubData(GL_ARRAY_BUFFER,
+            (g_foreground_len - 2)*sizeof(complex<float>), sizeof(v), v);
+
+    g_draw_last = v[3];
+    // g_foreground is only 2 vertices longer.
     g_foreground_len += 2;
+}
+void mouse_draw_finish(void)
+{
+    // Repeat last vertex, so that the next triangle has zero area.
+    assert(g_foreground_len + 1 <= g_foreground_max);
+
+    glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, g_foreground_len*sizeof(complex<float>),
+            sizeof(g_draw_last), &g_draw_last);
+
+    g_foreground_len += 1;
 }
 
 
