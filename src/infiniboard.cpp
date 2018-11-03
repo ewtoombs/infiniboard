@@ -16,7 +16,7 @@
 #define SCREEN_HEIGHT 600
 #define SCREEN_ZOOM 0.99f
 
-#define LINE_WIDTH 0.05f
+#define LINE_WIDTH 0.02f
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
 
@@ -284,11 +284,13 @@ void mouse_button_callback(GLFWwindow *window, int button,
 }
 void mouse_draw_start(complex<float> p0, complex<float> p1)
 {
-    assert(g_foreground_len + 4 <= g_foreground_max);
+    assert(g_foreground_len + 5 <= g_foreground_max);
 
     complex<float> a = p1 - p0;
     complex<float> u = LINE_WIDTH/2 * 1if*a/abs(a);
 
+    // Repeat first vertex so that two zero-area triangles are "drawn" from the
+    // previous line to this one.
     complex<float> v[] = {
             poincare::S(-g_pan, p0 - u),
             poincare::S(-g_pan, p0 - u),
@@ -302,7 +304,7 @@ void mouse_draw_start(complex<float> p0, complex<float> p1)
             sizeof(v), v);
 
     g_draw_last = v[3];
-    g_foreground_len += 4;
+    g_foreground_len += 5;
 }
 void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
 {
@@ -335,7 +337,7 @@ void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
 }
 void mouse_draw_finish(void)
 {
-    // Repeat last vertex, so that the next triangle has zero area.
+    // Repeat last vertex, so that the next two triangles have zero area.
     assert(g_foreground_len + 1 <= g_foreground_max);
 
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
