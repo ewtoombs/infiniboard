@@ -307,7 +307,7 @@ void mouse_draw_start(complex<float> p0, complex<float> p1)
     glBufferSubData(GL_ARRAY_BUFFER, g_foreground_len*sizeof(complex<float>),
             sizeof(v), v);
 
-    g_draw_last = v[3];
+    g_draw_last = v[4];
     g_foreground_len += 5;
 }
 void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
