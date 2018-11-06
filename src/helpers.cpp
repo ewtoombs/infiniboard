@@ -165,3 +165,9 @@ void line_strip_to_lines(complex<float> *x, unsigned n,
     *py = y;
     *pny = ny;
 }
+
+// The infinity norm.
+float norminff(complex<float> a)
+{
+    return max(abs(real(a)), abs(imag(a)));
+}

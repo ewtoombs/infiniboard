@@ -16,7 +16,7 @@
 #define SCREEN_HEIGHT 700
 #define SCREEN_ZOOM 0.99f
 
-#define T_RENDER 10e-3
+#define T_RENDER 7e-3
 
 // 16 MiB of space for drawing in should be fine until I can work out the
 // details of memory management. Actually, realistically, it should be fine for
@@ -27,6 +27,7 @@
 // I set this at the mid point between tau/6 and tau/4 to try to keep right
 // angles pointy, but most triangle corners dull.
 #define DRAW_CRIT_ANGLE (5.f * (float)TAU / 24.f)
+// Minimum spacing of drawing points, in pixels.
 #define DRAW_IGNORE 5.0
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
@@ -40,14 +41,14 @@ enum {
 
 void processEventsFor(double t);
 
-complex<float> screen_to_board(double x, double y);
+complex<float> screen_to_board(complex<float> s);
 
 void error_callback(int error, const char* description);
 bool init(void);
 bool init_gl();
 void key_callback(GLFWwindow *window, int key, int scancode,
         int action, int mods);
-void cursor_position_callback(GLFWwindow *window, double xpos, double ypos);
+void cursor_position_callback(GLFWwindow *window, double sx, double sy);
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods);
 void mouse_draw_start(complex<float> p0, complex<float> p1);
@@ -76,12 +77,11 @@ int g_mouse_state = IDLE;
 
 complex<float> g_pan = 0.f;
 
-// The screen (xpos, ypos) that was last used to actually make a pn. Used to
+// The screen (sx, sy) that was last used to actually make a pn. Used to
 // remove subsequent mouse movements that are too close to the last drawn mouse
 // movement. This is needed to remove dirty quantisation effects when mouse
 // position is rounded to the nearest pixel.
-double g_draw_xpos_last;
-double g_draw_ypos_last;
+complex<float> g_draw_s_last;
 complex<float> g_draw_p0;
 complex<float> g_draw_p1;
 // The vertex last drawn to foreground_vbo. The code uses this to "draw" two
@@ -109,21 +109,19 @@ void processEventsFor(double dt)
 
 
 // Convert from screen coordinates to (complex) board coordinates.
-complex<float> screen_to_board(double x, double y)
+complex<float> screen_to_board(complex<float> s)
 {
-    return
-        (
-            (float)x - (float)SCREEN_WIDTH/2.f -
-            ((float)y - (float)SCREEN_HEIGHT/2.f) * 1if
-        ) / ((float)SCREEN_HEIGHT/2.f) / SCREEN_ZOOM;
+    return (
+            conj(s) - (float)SCREEN_WIDTH/2.f + (float)SCREEN_HEIGHT/2.f * 1if
+           ) / ((float)SCREEN_HEIGHT/2.f) / SCREEN_ZOOM;
 }
 
 void error_callback(int error, const char *description)
 {
     fprintf(stderr, "Error: %s\n", description);
 }
-// Starts up glfw, creates window, and initialises the glfw- and
-// vendor-specific OpenGL state.
+// Start up glfw, create window, and initialise the glfw- and vendor-specific
+// OpenGL state.
 bool init(void)
 {
     glfwSetErrorCallback(error_callback);
@@ -250,31 +248,28 @@ void key_callback(GLFWwindow *window, int key, int scancode,
     if (key == GLFW_KEY_Q && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
-void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
+void cursor_position_callback(GLFWwindow *window, double sx, double sy)
 {
+    complex<float> s(sx, sy);
     complex<float> p;
     switch (g_mouse_state) {
     case PAN:
-        g_pan = screen_to_board(xpos, ypos);
+        g_pan = screen_to_board(s);
         break;
     case DRAW_START:
-        if (max(abs(xpos - g_draw_xpos_last),
-                abs(ypos - g_draw_ypos_last)) > DRAW_IGNORE) {
-            p = screen_to_board(xpos, ypos);
+        if (norminff(s - g_draw_s_last) > DRAW_IGNORE) {
+            p = screen_to_board(s);
             mouse_draw_start(g_draw_p0, p);
-            g_draw_xpos_last = xpos;
-            g_draw_ypos_last = ypos;
+            g_draw_s_last = s;
             g_draw_p1 = p;
             g_mouse_state = DRAW;
         }
         break;
     case DRAW:
-        if (max(abs(xpos - g_draw_xpos_last),
-                abs(ypos - g_draw_ypos_last)) > DRAW_IGNORE) {
-            p = screen_to_board(xpos, ypos);
+        if (norminff(s - g_draw_s_last) > DRAW_IGNORE) {
+            p = screen_to_board(s);
             mouse_draw(g_draw_p0, g_draw_p1, p);
-            g_draw_xpos_last = xpos;
-            g_draw_ypos_last = ypos;
+            g_draw_s_last = s;
             g_draw_p0 = g_draw_p1;
             g_draw_p1 = p;
         }
@@ -287,17 +282,17 @@ void mouse_button_callback(GLFWwindow *window, int button,
     switch (g_mouse_state) {
     case IDLE:
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_MIDDLE) {
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
-            g_pan = screen_to_board(xpos, ypos);
+            double sx, sy;
+            glfwGetCursorPos(window, &sx, &sy);
+            complex<float> s(sx, sy);
+            g_pan = screen_to_board(s);
             g_mouse_state = PAN;
         }
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
-            g_draw_xpos_last = xpos;
-            g_draw_ypos_last = ypos;
-            g_draw_p0 = screen_to_board(xpos, ypos);
+            double sx, sy;
+            glfwGetCursorPos(window, &sx, &sy);
+            complex<float> s(sx, sy);
+            g_draw_p0 = screen_to_board(s);
             g_mouse_state = DRAW_START;
         }
         break;
