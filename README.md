@@ -41,13 +41,17 @@ With that in mind,
 * g++
 * scons
 
+In Debian-like systems:
+
+    sudo apt install g++ scons libglfw3-dev libglew-dev
+
 ## INSTALLING
 
 There is no mechanism for system-wide installation right now. To compile and
 run it, in the root directory, run `scons && build/infiniboard`. To compile an
 optimised build, run `scons debug=0`.
 
-## TODO:
+## TODO
 
 * interpolate drawn segments with some sexy cubic splines.
 * handle 2-vertex line special case.
@@ -73,10 +77,10 @@ optimised build, run `scons debug=0`.
   and glfw rust bindings.
 * antialiasing, provided there is a negligible latency hit
 
-## DEFINITELY-WILL-NOT-DO:
+## DEFINITELY-WILL-NOT-DO
 
-* directx
-* macs. It might work ootb, but it will not be supported.
+* DirectX
+* Macs. It might work OOTB, but it will not be supported.
 * Any operating system that uses the wrong path separator.
 * eigen, or any other templatey C++ badness, but especially eigen. As
   rationale, I would show you literally any compile-time error message produced
