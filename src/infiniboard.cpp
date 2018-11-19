@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include <vector>
+
 #include <GL/glew.h>  // needed for shaders and shit.
 #include <GLFW/glfw3.h>
 
@@ -11,12 +13,14 @@
 #include "poincare.hpp"
 
 
+#define T_RENDER 7e-3
+
 // Screen dimension constants
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 700
 #define SCREEN_ZOOM 0.99f
 
-#define T_RENDER 7e-3
+#define GRID_SHADE 0.2f
 
 // 16 MiB of space for drawing in should be fine until I can work out the
 // details of memory management. Actually, realistically, it should be fine for
@@ -57,6 +61,14 @@ void mouse_draw_finish(void);
 void render(void);
 bool tasting(void);
 
+class Line {
+public:
+    vector<unsigned> offsets;
+    void append(complex<float> p);
+    void replace(unsigned nerase, complex<float> *ps, unsigned nps);
+    void finish(void);
+};
+
 
 // Globals, prefixed with g_.
 GLFWwindow *g_window = NULL;
@@ -70,6 +82,7 @@ unsigned g_foreground_max = DRAW_SPACE/sizeof(complex<float>);
 
 GLuint g_poincare_program;
 GLuint g_pan_uni;
+GLuint g_colour_uni;
 GLuint g_position_attrib;
 
 
@@ -87,6 +100,8 @@ complex<float> g_draw_p1;
 // The vertex last drawn to foreground_vbo. The code uses this to "draw" two
 // zero-area "triangles" from the end of one line to the beginning of the next.
 complex<float> g_draw_v_last;
+
+vector<Line *> g_lines();
 
 
 unsigned char g_frame_counter = 0;
@@ -180,16 +195,21 @@ bool init_gl()
     glBufferData(GL_ARRAY_BUFFER, g_background_len*sizeof(complex<float>),
             background_data, GL_STATIC_DRAW);
 
-    // g_background_vbo is ready.
 
     glGenBuffers(1, &g_foreground_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glBufferData(GL_ARRAY_BUFFER, g_foreground_max*sizeof(complex<float>),
             NULL, GL_DYNAMIC_DRAW);
 
+    Line *l = new Line();
+    l->append(0.f);
+    l->append(0.1f);
+    l->append(0.05f + 0.0866if);
+    l->finish();
+
 
     g_poincare_program = shader_program(
-            "glsl/poincare.vert", "glsl/white.frag");
+            "glsl/poincare.vert", "glsl/mono.frag");
 
 
     // Use the poincare shader program in all subsequent draw calls.
@@ -202,6 +222,7 @@ bool init_gl()
     glEnableVertexAttribArray(g_position_attrib);
 
     g_pan_uni = glGetUniformLocation(g_poincare_program, "pan");
+    g_colour_uni = glGetUniformLocation(g_poincare_program, "colour");
 
     // For all subsequent draw calls, pass SCREEN_RATIO into the uniform vertex
     // shader input, screen_ratio.
@@ -224,6 +245,7 @@ void render(void)
 {
     glUniform2f(g_pan_uni, real(g_pan), imag(g_pan));
 
+
     glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
     // Pass the currently bound VBO (g_background_vbo) to the "position" input
     // of the vertex shader.  This will associate one 2-vector out of
@@ -234,10 +256,14 @@ void render(void)
     glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
     // Draw lines with the active shader program and its current inputs.
+    glUniform4f(g_colour_uni, GRID_SHADE, GRID_SHADE, GRID_SHADE, 1.f);
     glDrawArrays(GL_LINES, 0, g_background_len);
+
 
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glUniform4f(g_colour_uni, 1.f, 1.f, 1.f, 1.f);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, g_foreground_len);
 }
 
@@ -403,6 +429,16 @@ void mouse_draw_finish(void)
             sizeof(g_draw_v_last), &g_draw_v_last);
 
     g_foreground_len += 1;
+}
+
+void Line::append(complex<float> p)
+{
+}
+void Line::replace(unsigned nerase, complex<float> *ps, unsigned nps)
+{
+}
+void Line::finish(void)
+{
 }
 
 
