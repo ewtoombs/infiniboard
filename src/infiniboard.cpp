@@ -13,7 +13,7 @@
 #include "poincare.hpp"
 
 
-#define T_RENDER 7e-3
+#define T_RENDER 10e-3
 
 // Screen dimension constants
 #define SCREEN_WIDTH 800
@@ -338,6 +338,7 @@ void mouse_button_callback(GLFWwindow *window, int button,
         break;
     }
 }
+
 void mouse_draw_start(complex<float> p0, complex<float> p1)
 {
     assert(g_foreground_len + 5 <= g_foreground_max);
@@ -474,6 +475,7 @@ int main(int argc, char *argv[])
             // almost always. This command is put here to ensure the buffers
             // are indeed swapped before continuing!
             glClear(GL_COLOR_BUFFER_BIT);
+            glFinish();  // Also, actually do the thing, like right meow.
             double t1 = glfwGetTime();
             if (tasting())
                 printf("Time waiting for vsync: %.3fms.\n",
