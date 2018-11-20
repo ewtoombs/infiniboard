@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include <vector>
+
 #include <GL/glew.h>  // needed for shaders and shit.
 #include <GLFW/glfw3.h>
 
@@ -11,16 +13,26 @@
 #include "poincare.hpp"
 
 
+#define T_RENDER 7e-3
+
 // Screen dimension constants
 #define SCREEN_WIDTH 800
-#define SCREEN_HEIGHT 600
+#define SCREEN_HEIGHT 700
 #define SCREEN_ZOOM 0.99f
 
+#define GRID_SHADE 0.2f
+
 // 16 MiB of space for drawing in should be fine until I can work out the
-// details of memory management.
+// details of memory management. Actually, realistically, it should be fine for
+// as long as I don't have board saving and loading working, because that's the
+// only conceivable way 16 MiB could ever get eaten up by drawing.
 #define DRAW_SPACE (16*MiB)
 #define LINE_WIDTH 0.02f
-#define DRAW_CRIT_ANGLE ((float)TAU / 8.f)
+// I set this at the mid point between tau/6 and tau/4 to try to keep right
+// angles pointy, but most triangle corners dull.
+#define DRAW_CRIT_ANGLE (5.f * (float)TAU / 24.f)
+// Minimum spacing of drawing points, in pixels.
+#define DRAW_IGNORE 5.0
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
 
@@ -33,14 +45,14 @@ enum {
 
 void processEventsFor(double t);
 
-complex<float> screen_to_board(double x, double y);
+complex<float> screen_to_board(complex<float> s);
 
 void error_callback(int error, const char* description);
 bool init(void);
 bool init_gl();
 void key_callback(GLFWwindow *window, int key, int scancode,
         int action, int mods);
-void cursor_position_callback(GLFWwindow *window, double xpos, double ypos);
+void cursor_position_callback(GLFWwindow *window, double sx, double sy);
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods);
 void mouse_draw_start(complex<float> p0, complex<float> p1);
@@ -48,6 +60,14 @@ void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2);
 void mouse_draw_finish(void);
 void render(void);
 bool tasting(void);
+
+class Line {
+public:
+    vector<unsigned> offsets;
+    void append(complex<float> p);
+    void replace(unsigned nerase, complex<float> *ps, unsigned nps);
+    void finish(void);
+};
 
 
 // Globals, prefixed with g_.
@@ -62,13 +82,27 @@ unsigned g_foreground_max = DRAW_SPACE/sizeof(complex<float>);
 
 GLuint g_poincare_program;
 GLuint g_pan_uni;
+GLuint g_colour_uni;
 GLuint g_position_attrib;
 
+
 int g_mouse_state = IDLE;
+
 complex<float> g_pan = 0.f;
+
+// The screen (sx, sy) that was last used to actually make a pn. Used to
+// remove subsequent mouse movements that are too close to the last drawn mouse
+// movement. This is needed to remove dirty quantisation effects when mouse
+// position is rounded to the nearest pixel.
+complex<float> g_draw_s_last;
 complex<float> g_draw_p0;
 complex<float> g_draw_p1;
-complex<float> g_draw_last;
+// The vertex last drawn to foreground_vbo. The code uses this to "draw" two
+// zero-area "triangles" from the end of one line to the beginning of the next.
+complex<float> g_draw_v_last;
+
+vector<Line *> g_lines();
+
 
 unsigned char g_frame_counter = 0;
 
@@ -90,21 +124,19 @@ void processEventsFor(double dt)
 
 
 // Convert from screen coordinates to (complex) board coordinates.
-complex<float> screen_to_board(double x, double y)
+complex<float> screen_to_board(complex<float> s)
 {
-    return
-        (
-            (float)x - (float)SCREEN_WIDTH/2.f -
-            ((float)y - (float)SCREEN_HEIGHT/2.f) * 1if
-        ) / ((float)SCREEN_HEIGHT/2.f) / SCREEN_ZOOM;
+    return (
+            conj(s) - (float)SCREEN_WIDTH/2.f + (float)SCREEN_HEIGHT/2.f * 1if
+           ) / ((float)SCREEN_HEIGHT/2.f) / SCREEN_ZOOM;
 }
 
 void error_callback(int error, const char *description)
 {
     fprintf(stderr, "Error: %s\n", description);
 }
-// Starts up glfw, creates window, and initialises the glfw- and
-// vendor-specific OpenGL state.
+// Start up glfw, create window, and initialise the glfw- and vendor-specific
+// OpenGL state.
 bool init(void)
 {
     glfwSetErrorCallback(error_callback);
@@ -163,16 +195,21 @@ bool init_gl()
     glBufferData(GL_ARRAY_BUFFER, g_background_len*sizeof(complex<float>),
             background_data, GL_STATIC_DRAW);
 
-    // g_background_vbo is ready.
 
     glGenBuffers(1, &g_foreground_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glBufferData(GL_ARRAY_BUFFER, g_foreground_max*sizeof(complex<float>),
             NULL, GL_DYNAMIC_DRAW);
 
+    Line *l = new Line();
+    l->append(0.f);
+    l->append(0.1f);
+    l->append(0.05f + 0.0866if);
+    l->finish();
+
 
     g_poincare_program = shader_program(
-            "glsl/poincare.vert", "glsl/white.frag");
+            "glsl/poincare.vert", "glsl/mono.frag");
 
 
     // Use the poincare shader program in all subsequent draw calls.
@@ -185,6 +222,7 @@ bool init_gl()
     glEnableVertexAttribArray(g_position_attrib);
 
     g_pan_uni = glGetUniformLocation(g_poincare_program, "pan");
+    g_colour_uni = glGetUniformLocation(g_poincare_program, "colour");
 
     // For all subsequent draw calls, pass SCREEN_RATIO into the uniform vertex
     // shader input, screen_ratio.
@@ -207,6 +245,7 @@ void render(void)
 {
     glUniform2f(g_pan_uni, real(g_pan), imag(g_pan));
 
+
     glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
     // Pass the currently bound VBO (g_background_vbo) to the "position" input
     // of the vertex shader.  This will associate one 2-vector out of
@@ -217,10 +256,14 @@ void render(void)
     glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
     // Draw lines with the active shader program and its current inputs.
+    glUniform4f(g_colour_uni, GRID_SHADE, GRID_SHADE, GRID_SHADE, 1.f);
     glDrawArrays(GL_LINES, 0, g_background_len);
+
 
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glVertexAttribPointer(g_position_attrib, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glUniform4f(g_colour_uni, 1.f, 1.f, 1.f, 1.f);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, g_foreground_len);
 }
 
@@ -231,24 +274,31 @@ void key_callback(GLFWwindow *window, int key, int scancode,
     if (key == GLFW_KEY_Q && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
-void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
+void cursor_position_callback(GLFWwindow *window, double sx, double sy)
 {
-    complex<float> p1, p2;
+    complex<float> s(sx, sy);
+    complex<float> p;
     switch (g_mouse_state) {
     case PAN:
-        g_pan = screen_to_board(xpos, ypos);
+        g_pan = screen_to_board(s);
         break;
     case DRAW_START:
-        p1 = screen_to_board(xpos, ypos);
-        mouse_draw_start(g_draw_p0, p1);
-        g_draw_p1 = p1;
-        g_mouse_state = DRAW;
+        if (norminff(s - g_draw_s_last) > DRAW_IGNORE) {
+            p = screen_to_board(s);
+            mouse_draw_start(g_draw_p0, p);
+            g_draw_s_last = s;
+            g_draw_p1 = p;
+            g_mouse_state = DRAW;
+        }
         break;
     case DRAW:
-        p2 = screen_to_board(xpos, ypos);
-        mouse_draw(g_draw_p0, g_draw_p1, p2);
-        g_draw_p0 = g_draw_p1;
-        g_draw_p1 = p2;
+        if (norminff(s - g_draw_s_last) > DRAW_IGNORE) {
+            p = screen_to_board(s);
+            mouse_draw(g_draw_p0, g_draw_p1, p);
+            g_draw_s_last = s;
+            g_draw_p0 = g_draw_p1;
+            g_draw_p1 = p;
+        }
         break;
     }
 }
@@ -258,15 +308,17 @@ void mouse_button_callback(GLFWwindow *window, int button,
     switch (g_mouse_state) {
     case IDLE:
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_MIDDLE) {
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
-            g_pan = screen_to_board(xpos, ypos);
+            double sx, sy;
+            glfwGetCursorPos(window, &sx, &sy);
+            complex<float> s(sx, sy);
+            g_pan = screen_to_board(s);
             g_mouse_state = PAN;
         }
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
-            g_draw_p0 = screen_to_board(xpos, ypos);
+            double sx, sy;
+            glfwGetCursorPos(window, &sx, &sy);
+            complex<float> s(sx, sy);
+            g_draw_p0 = screen_to_board(s);
             g_mouse_state = DRAW_START;
         }
         break;
@@ -307,7 +359,7 @@ void mouse_draw_start(complex<float> p0, complex<float> p1)
     glBufferSubData(GL_ARRAY_BUFFER, g_foreground_len*sizeof(complex<float>),
             sizeof(v), v);
 
-    g_draw_last = v[3];
+    g_draw_v_last = v[4];
     g_foreground_len += 5;
 }
 void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
@@ -338,8 +390,8 @@ void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
         glBufferSubData(GL_ARRAY_BUFFER,
                 (g_foreground_len - 2)*sizeof(complex<float>), sizeof(v), v);
 
-        g_draw_last = v[4];
-        // g_foreground is only 2 vertices longer.
+        g_draw_v_last = v[4];
+        // g_foreground is only 3 vertices longer.
         g_foreground_len += 3;
     } else {
         assert(g_foreground_len + 2 <= g_foreground_max);
@@ -362,7 +414,7 @@ void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
         glBufferSubData(GL_ARRAY_BUFFER,
                 (g_foreground_len - 2)*sizeof(complex<float>), sizeof(v), v);
 
-        g_draw_last = v[3];
+        g_draw_v_last = v[3];
         // g_foreground is only 2 vertices longer.
         g_foreground_len += 2;
     }
@@ -374,9 +426,19 @@ void mouse_draw_finish(void)
 
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glBufferSubData(GL_ARRAY_BUFFER, g_foreground_len*sizeof(complex<float>),
-            sizeof(g_draw_last), &g_draw_last);
+            sizeof(g_draw_v_last), &g_draw_v_last);
 
     g_foreground_len += 1;
+}
+
+void Line::append(complex<float> p)
+{
+}
+void Line::replace(unsigned nerase, complex<float> *ps, unsigned nps)
+{
+}
+void Line::finish(void)
+{
 }
 
 
@@ -397,7 +459,6 @@ int main(int argc, char *argv[])
 
         double t_last_frame = glfwGetTime();
         while (!glfwWindowShouldClose(g_window)) {  // once per frame.
-            double t_draw = 4e-3;
             double t;
             if (tasting())
                 t = glfwGetTime();
@@ -426,16 +487,16 @@ int main(int argc, char *argv[])
             //---------------- ***VSYNC*** ----------------
 
             // OK, the vsync has like /juuuust/ happened. The buffers have just
-            // been swapped for suresiez.  Process events for T - t_draw, so
+            // been swapped for suresiez.  Process events for T - T_RENDER, so
             // that as many events as possible are used to determine the
             // content of the next frame.
             if (tasting())
                 t = glfwGetTime();
-            processEventsFor(T - t_draw);
+            processEventsFor(T - T_RENDER);
             if (tasting())
                 printf("processEventsFor takes %.3fms.\n", (glfwGetTime() - t)*1000.);
 
-            // We have awoken! It is only t_draw seconds before the next
+            // We have awoken! It is only T_RENDER seconds before the next
             // vsync, and we have got a frame to render!  Do all OpenGL drawing
             // commands. 
             if (tasting())

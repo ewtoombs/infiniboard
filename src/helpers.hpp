@@ -4,6 +4,8 @@
 
 #include <complex>
 #include <cstring>
+#include <iostream>
+using namespace std;
 
 #include <GL/glew.h>  // needed for shaders and shit.
 #include <GLFW/glfw3.h>
@@ -11,7 +13,6 @@
 #define TAU 6.283185307179586
 #define MiB 0x100000
 
-#include <iostream>
 #define print(x) cout << x << '\n'
 #define printe(x) cerr << x << '\n'
 
@@ -21,8 +22,6 @@
     ((type *)malloc((size)*sizeof(type)))
 #define ZERO_ARRAY(a, n) memset((a), 0, (n)*sizeof(*(a)))
 #define COPY_ARRAY(a, b, n) memcpy((b), (a), (n)*sizeof(*(a)))
-
-using namespace std;
 
 float sq(float x);
 float fact(unsigned n);
@@ -44,3 +43,5 @@ GLuint shader_program(const char *vertfile, const char *fragfile);
 complex<float> *linspacecf(complex<float> a, complex<float> b, unsigned N);
 void line_strip_to_lines(complex<float> *x, unsigned n,
         complex<float> **py, unsigned *pny);
+
+float norminff(complex<float> a);
