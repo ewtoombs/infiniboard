@@ -43,7 +43,7 @@ enum {
     DRAW
 };
 
-void processEventsFor(double t);
+void process_events_for(double t);
 
 complex<float> screen_to_board(complex<float> s);
 
@@ -109,13 +109,12 @@ unsigned char g_frame_counter = 0;
 
 // Process events for dt seconds, then return. Should almost always return in
 // exactly dt seconds.
-void processEventsFor(double dt)
+void process_events_for(double dt)
 {
-    double t0 = glfwGetTime();
     for (;;) {
+        double t0 = glfwGetTime();
         glfwWaitEventsTimeout(dt);
-        double t1 = glfwGetTime();
-        double u = t1 - t0;
+        double u = glfwGetTime() - t0;
         if (u >= dt)
             return;
         dt -= u;
@@ -494,7 +493,7 @@ int main(int argc, char *argv[])
             // content of the next frame.
             if (tasting())
                 t = glfwGetTime();
-            processEventsFor(T - T_RENDER);
+            process_events_for(T - T_RENDER);
             if (tasting())
                 printf("processEventsFor takes %.3fms.\n", (glfwGetTime() - t)*1000.);
 
