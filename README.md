@@ -7,6 +7,10 @@ rendered conformally as a Poincaré disk.) This allows for the drawing of trees,
 graphs, and other novel . . . things that would not be possible on a regular
 blackboard.
 
+![screenshot 0](https://toombs.tk/infiniboard-screenshot-00.png)
+
+![screenshot 1](https://toombs.tk/infiniboard-screenshot-01.png)
+
 *Everything you have ever drawn on the infiniboard will be visible, at least at
 some zoom level.* As the blackboard is panned, objects in the centre get
 smaller as they approach the edge, and objects at the edge get larger as they
