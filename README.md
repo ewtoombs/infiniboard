@@ -26,8 +26,9 @@ the monitor's refresh rate. I still observe lag with respect to the system
 cursor, but that could just be X11 and its perpetually-broken-ass self. Which
 reminds me.
 
-*Will support Wayland.* In fact, it may already support wayland. Infiniboard is
-implemented with glfw, so it should Just Work™. Testers are welcome.
+*Supports Wayland.* Infiniboard is implemented with glfw, so it should Just
+Work™ on X11 and on Wayland. Support for X11 is about to get removed, though,
+because of its general terribleness.
 
 Besides that, it's really just a regular blackboard.
 
