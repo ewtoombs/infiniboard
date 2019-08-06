@@ -27,19 +27,13 @@
 // as long as I don't have board saving and loading working, because that's the
 // only conceivable way 16 MiB could ever get eaten up by drawing.
 #define DRAW_SPACE (16*MiB)
-#define LINE_WIDTH 0.02f
-// I set this at the mid point between tau/6 and tau/4 to try to keep right
-// angles pointy, but most triangle corners dull.
-#define DRAW_CRIT_ANGLE (5.f * (float)TAU / 24.f)
-// Minimum spacing of drawing points, in pixels.
-#define DRAW_IGNORE 5.0
+#define LINE_WIDTH 0.01f
 
 #define SCREEN_RATIO ((float)SCREEN_WIDTH / (float)SCREEN_HEIGHT)
 
-enum {
+enum {  // mouse states
     IDLE,
     PAN,
-    DRAW_START,
     DRAW
 };
 
@@ -58,16 +52,9 @@ void mouse_button_callback(GLFWwindow *window, int button,
 void mouse_draw_start(complex<float> p0, complex<float> p1);
 void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2);
 void mouse_draw_finish(void);
+void refresh_foreground(void);
 void render(void);
 bool tasting(void);
-
-class Line {
-public:
-    vector<unsigned> offsets;
-    void append(complex<float> p);
-    void replace(unsigned nerase, complex<float> *ps, unsigned nps);
-    void finish(void);
-};
 
 
 // Globals, prefixed with g_.
@@ -87,22 +74,9 @@ GLuint g_position_attrib;
 
 
 int g_mouse_state = IDLE;
+vector<vector<complex<float>>> g_lineses;  // (lol)
 
 complex<float> g_pan = 0.f;
-
-// The screen (sx, sy) that was last used to actually make a pn. Used to
-// remove subsequent mouse movements that are too close to the last drawn mouse
-// movement. This is needed to remove dirty quantisation effects when mouse
-// position is rounded to the nearest pixel.
-complex<float> g_draw_s_last;
-complex<float> g_draw_p0;
-complex<float> g_draw_p1;
-// The vertex last drawn to foreground_vbo. The code uses this to "draw" two
-// zero-area "triangles" from the end of one line to the beginning of the next.
-complex<float> g_draw_v_last;
-
-vector<Line *> g_lines();
-
 
 unsigned char g_frame_counter = 0;
 
@@ -200,12 +174,6 @@ bool init_gl()
     glBufferData(GL_ARRAY_BUFFER, g_foreground_max*sizeof(complex<float>),
             NULL, GL_DYNAMIC_DRAW);
 
-    Line *l = new Line();
-    l->append(0.f);
-    l->append(0.1f);
-    l->append(0.05f + 0.0866if);
-    l->finish();
-
 
     g_poincare_program = shader_program(
             "glsl/poincare.vert", "glsl/mono.frag");
@@ -272,6 +240,8 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 {
     if (key == GLFW_KEY_Q && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+    if (key == GLFW_KEY_U && action == GLFW_PRESS && g_lineses.size() > 0)
+        g_lineses.pop_back();
 }
 void cursor_position_callback(GLFWwindow *window, double sx, double sy)
 {
@@ -281,166 +251,97 @@ void cursor_position_callback(GLFWwindow *window, double sx, double sy)
     case PAN:
         g_pan = screen_to_board(s);
         break;
-    case DRAW_START:
-        if (norminff(s - g_draw_s_last) > DRAW_IGNORE) {
-            p = screen_to_board(s);
-            mouse_draw_start(g_draw_p0, p);
-            g_draw_s_last = s;
-            g_draw_p1 = p;
-            g_mouse_state = DRAW;
-        }
-        break;
     case DRAW:
-        if (norminff(s - g_draw_s_last) > DRAW_IGNORE) {
-            p = screen_to_board(s);
-            mouse_draw(g_draw_p0, g_draw_p1, p);
-            g_draw_s_last = s;
-            g_draw_p0 = g_draw_p1;
-            g_draw_p1 = p;
-        }
+        p = screen_to_board(s);
+        g_lineses.back().push_back(p);
+        refresh_foreground();
         break;
     }
 }
 void mouse_button_callback(GLFWwindow *window, int button,
         int action, int mods)
 {
+    double sx, sy;
+    glfwGetCursorPos(window, &sx, &sy);
+    complex<float> s(sx, sy);
     switch (g_mouse_state) {
     case IDLE:
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_MIDDLE) {
-            double sx, sy;
-            glfwGetCursorPos(window, &sx, &sy);
-            complex<float> s(sx, sy);
             g_pan = screen_to_board(s);
             g_mouse_state = PAN;
         }
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
-            double sx, sy;
-            glfwGetCursorPos(window, &sx, &sy);
-            complex<float> s(sx, sy);
-            g_draw_p0 = screen_to_board(s);
-            g_mouse_state = DRAW_START;
+            complex<float> p = screen_to_board(s);
+            vector<complex<float>> &&v{};
+            v.push_back(p);
+            g_lineses.push_back(v);
+            refresh_foreground();
+            g_mouse_state = DRAW;
         }
         break;
     case PAN:
         if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_MIDDLE)
             g_mouse_state = IDLE;
         break;
-    case DRAW_START:
-        if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT)
-            g_mouse_state = IDLE;
-        break;
     case DRAW:
         if (action == GLFW_RELEASE && button == GLFW_MOUSE_BUTTON_LEFT) {
-            mouse_draw_finish();
+            // This point s is never different from the last one, acquired from
+            // cursor_position_callback().  Do not bother adding s here.
             g_mouse_state = IDLE;
         }
         break;
     }
 }
 
-void mouse_draw_start(complex<float> p0, complex<float> p1)
+void refresh_foreground(void)
 {
-    assert(g_foreground_len + 5 <= g_foreground_max);
-
-    complex<float> a = p1 - p0;
-    complex<float> u = LINE_WIDTH/2 * 1if*a/abs(a);
-
-    // Repeat first vertex so that two zero-area triangles are "drawn" from the
-    // previous line to this one.
-    complex<float> v[] = {
-            poincare::S(-g_pan, p0 - u),
-            poincare::S(-g_pan, p0 - u),
-            poincare::S(-g_pan, p0 + u),
-            poincare::S(-g_pan, p1 - u),
-            poincare::S(-g_pan, p1 + u),
+    complex<float> shape[] = {
+         3.f + 4if,
+         4.f + 3if,
+        -3.f - 4if,
+        -4.f - 3if,
         };
+    for (unsigned i = 0; i < 4; i++)
+        shape[i] *= LINE_WIDTH/10;
+    vector<complex<float>> rendered;
+    for (auto& lines : g_lineses) {
+        unsigned N = lines.size();
+        // Skip the first point.
+        unsigned first_stitch_i = rendered.size();
+        rendered.push_back(0);  // Save room for stitching.
+        for (unsigned i = 0; i < N - 1; i++) {
+            // The first N-1 points require actual lines from one to the next.
+            complex<float> r0 = lines[i],
+                           r1 = lines[i + 1];
+            rendered.push_back(r0 + shape[0]);
+            rendered.push_back(r0 + shape[1]);
+            rendered.push_back(r1 + shape[1]);
+            rendered.push_back(r0 + shape[2]);
+            rendered.push_back(r1 + shape[2]);
+            rendered.push_back(r0 + shape[3]);
+            rendered.push_back(r1 + shape[3]);
+            rendered.push_back(r0 + shape[0]);
+        }
+        // The last point requires a cap.
+        complex<float> r0 = lines[N - 1];
+        rendered.push_back(r0 + shape[0]);
+        rendered.push_back(r0 + shape[1]);
+        rendered.push_back(r0 + shape[3]);
+        rendered.push_back(r0 + shape[2]);
 
-    glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, g_foreground_len*sizeof(complex<float>),
-            sizeof(v), v);
-
-    g_draw_v_last = v[4];
-    g_foreground_len += 5;
-}
-void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2)
-{
-    complex<float> a = p1 - p0, b = p2 - p1;
-    a /= abs(a);
-    b /= abs(b);
-
-    if (real(a)*real(b) + imag(a)*imag(b) < -cos(DRAW_CRIT_ANGLE)) {
-        assert(g_foreground_len + 3 <= g_foreground_max);
-
-        complex<float> c = a - b;
-        // norm(c) = |c|^2. Yeah, I know. Fuck you, C++.
-        complex<float> d = LINE_WIDTH * 1if*c/norm(c);
-
-        complex<float> u = LINE_WIDTH/2 * 1if*b;
-
-        complex<float> v[] = {
-                poincare::S(-g_pan, p1 - d),
-                poincare::S(-g_pan, p1 + d),
-                poincare::S(-g_pan, p1 - d),
-                poincare::S(-g_pan, p2 - u),
-                poincare::S(-g_pan, p2 + u),
-            };
-
-        // Erase the cap from the previous run.
-        glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
-        glBufferSubData(GL_ARRAY_BUFFER,
-                (g_foreground_len - 2)*sizeof(complex<float>), sizeof(v), v);
-
-        g_draw_v_last = v[4];
-        // g_foreground is only 3 vertices longer.
-        g_foreground_len += 3;
-    } else {
-        assert(g_foreground_len + 2 <= g_foreground_max);
-
-        complex<float> c = a + b;
-        // norm(c) = |c|^2. Yeah, I know. Fuck you, C++.
-        complex<float> d = LINE_WIDTH * 1if*c/norm(c);
-
-        complex<float> u = LINE_WIDTH/2 * 1if*b;
-
-        complex<float> v[] = {
-                poincare::S(-g_pan, p1 - d),
-                poincare::S(-g_pan, p1 + d),
-                poincare::S(-g_pan, p2 - u),
-                poincare::S(-g_pan, p2 + u),
-            };
-
-        // Erase the cap from the previous run.
-        glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
-        glBufferSubData(GL_ARRAY_BUFFER,
-                (g_foreground_len - 2)*sizeof(complex<float>), sizeof(v), v);
-
-        g_draw_v_last = v[3];
-        // g_foreground is only 2 vertices longer.
-        g_foreground_len += 2;
+        // Repeat the first and last vertices so that two zero-area triangles
+        // are "drawn" from the previous line to this one.
+        rendered[first_stitch_i] = rendered[first_stitch_i + 1];
+        rendered.push_back(rendered.back());
     }
-}
-void mouse_draw_finish(void)
-{
-    // Repeat last vertex, so that the next two triangles have zero area.
-    assert(g_foreground_len + 1 <= g_foreground_max);
 
+    // set g_foreground_len.
+    g_foreground_len = rendered.size();
+    assert(g_foreground_len <= g_foreground_max);
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, g_foreground_len*sizeof(complex<float>),
-            sizeof(g_draw_v_last), &g_draw_v_last);
-
-    g_foreground_len += 1;
+    glBufferSubData(GL_ARRAY_BUFFER, 0,
+            rendered.size()*8, rendered.data());
 }
-
-void Line::append(complex<float> p)
-{
-}
-void Line::replace(unsigned nerase, complex<float> *ps, unsigned nps)
-{
-}
-void Line::finish(void)
-{
-}
-
 
 // Give the stew a taste every once in a while.
 bool tasting(void)
