@@ -335,6 +335,9 @@ void refresh_foreground(void)
         rendered.push_back(rendered.back());
     }
 
+    for (auto& p : rendered)
+        p = poincare::S(-g_pan, p);
+
     // set g_foreground_len.
     g_foreground_len = rendered.size();
     assert(g_foreground_len <= g_foreground_max);
