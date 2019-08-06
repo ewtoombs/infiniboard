@@ -240,8 +240,10 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 {
     if (key == GLFW_KEY_Q && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
-    if (key == GLFW_KEY_U && action == GLFW_PRESS && g_lineses.size() > 0)
+    if (key == GLFW_KEY_U && action == GLFW_PRESS && g_lineses.size() > 0) {
         g_lineses.pop_back();
+        refresh_foreground();
+    }
 }
 void cursor_position_callback(GLFWwindow *window, double sx, double sy)
 {
@@ -253,7 +255,7 @@ void cursor_position_callback(GLFWwindow *window, double sx, double sy)
         break;
     case DRAW:
         p = screen_to_board(s);
-        g_lineses.back().push_back(p);
+        g_lineses.back().push_back(poincare::S(-g_pan, p));
         refresh_foreground();
         break;
     }
@@ -273,7 +275,7 @@ void mouse_button_callback(GLFWwindow *window, int button,
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
             complex<float> p = screen_to_board(s);
             vector<complex<float>> &&v{};
-            v.push_back(p);
+            v.push_back(poincare::S(-g_pan, p));
             g_lineses.push_back(v);
             refresh_foreground();
             g_mouse_state = DRAW;
@@ -334,9 +336,6 @@ void refresh_foreground(void)
         rendered[first_stitch_i] = rendered[first_stitch_i + 1];
         rendered.push_back(rendered.back());
     }
-
-    for (auto& p : rendered)
-        p = poincare::S(-g_pan, p);
 
     // set g_foreground_len.
     g_foreground_len = rendered.size();
