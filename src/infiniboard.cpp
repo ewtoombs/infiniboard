@@ -74,7 +74,11 @@ GLuint g_position_attrib;
 
 
 int g_mouse_state = IDLE;
-vector<vector<complex<float>>> g_lineses;  // (lol)
+// This is more or less the board's foreground state. This is a list of curves,
+// each curve being approximated by a series of points. There is a one-to-one
+// correspondence (currently) between mouse positions while drawing and points
+// in the curve.
+vector<vector<complex<float>>> g_curves;
 
 complex<float> g_pan = 0.f;
 
@@ -240,8 +244,8 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 {
     if (key == GLFW_KEY_Q && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
-    if (key == GLFW_KEY_U && action == GLFW_PRESS && g_lineses.size() > 0) {
-        g_lineses.pop_back();
+    if (key == GLFW_KEY_U && action == GLFW_PRESS && g_curves.size() > 0) {
+        g_curves.pop_back();
         refresh_foreground();
     }
 }
@@ -255,7 +259,7 @@ void cursor_position_callback(GLFWwindow *window, double sx, double sy)
         break;
     case DRAW:
         p = screen_to_board(s);
-        g_lineses.back().push_back(poincare::S(-g_pan, p));
+        g_curves.back().push_back(poincare::S(-g_pan, p));
         refresh_foreground();
         break;
     }
@@ -276,7 +280,7 @@ void mouse_button_callback(GLFWwindow *window, int button,
             complex<float> p = screen_to_board(s);
             vector<complex<float>> &&v{};
             v.push_back(poincare::S(-g_pan, p));
-            g_lineses.push_back(v);
+            g_curves.push_back(v);
             refresh_foreground();
             g_mouse_state = DRAW;
         }
@@ -297,6 +301,10 @@ void mouse_button_callback(GLFWwindow *window, int button,
 
 void refresh_foreground(void)
 {
+    // TODO: A huge amount of the foreground is the same as it was before, in a
+    // predictable way. So almost this entire function doesn't actually have to
+    // get run. It gets very buggy, though, only trying to refresh the parts
+    // that have changed. I'll only do it if it becomes a performance problem.
     complex<float> shape[] = {
          3.f + 4if,
          4.f + 3if,
@@ -305,34 +313,55 @@ void refresh_foreground(void)
         };
     for (unsigned i = 0; i < 4; i++)
         shape[i] *= LINE_WIDTH/10;
+    // Yes, rendered gets allocated every time, but there's probably not a
+    // point in reusing a previous allocation under any circumstances. I'll
+    // only consider it if it isn't fast enough. The same goes for reserving
+    // space---something I actually could do pretty easily but still won't in
+    // case something else changes.
     vector<complex<float>> rendered;
-    for (auto& lines : g_lineses) {
-        unsigned N = lines.size();
-        // Skip the first point.
+    for (auto& curve : g_curves) {
+        unsigned N = curve.size();
+        // Record the location of this curve's first point and reserve room so
+        // that it can be repeated. See "stitching" below.
         unsigned first_stitch_i = rendered.size();
-        rendered.push_back(0);  // Save room for stitching.
+        rendered.push_back(0);  
         for (unsigned i = 0; i < N - 1; i++) {
             // The first N-1 points require actual lines from one to the next.
-            complex<float> r0 = lines[i],
-                           r1 = lines[i + 1];
-            rendered.push_back(r0 + shape[0]);
-            rendered.push_back(r0 + shape[1]);
-            rendered.push_back(r1 + shape[1]);
-            rendered.push_back(r0 + shape[2]);
-            rendered.push_back(r1 + shape[2]);
-            rendered.push_back(r0 + shape[3]);
-            rendered.push_back(r1 + shape[3]);
-            rendered.push_back(r0 + shape[0]);
+            complex<float> r0 = curve[i],
+                           r1 = curve[i + 1];
+
+            // Zoom the point shape according to where the point is located.
+            complex<float> shape0[4];
+            for (unsigned j = 0; j < 4; j++)
+                // norm is actually the modulus squared. Nice, C++.
+                shape0[j] = shape[j]*(1 - norm(r0));
+            complex<float> shape1[4];
+            for (unsigned j = 0; j < 4; j++)
+                shape1[j] = shape[j]*(1 - norm(r1));
+
+            rendered.push_back(r0 + shape0[0]);
+            rendered.push_back(r0 + shape0[1]);
+            rendered.push_back(r1 + shape1[1]);
+            rendered.push_back(r0 + shape0[2]);
+            rendered.push_back(r1 + shape1[2]);
+            rendered.push_back(r0 + shape0[3]);
+            rendered.push_back(r1 + shape1[3]);
+            rendered.push_back(r0 + shape0[0]);
         }
         // The last point requires a cap.
-        complex<float> r0 = lines[N - 1];
-        rendered.push_back(r0 + shape[0]);
-        rendered.push_back(r0 + shape[1]);
-        rendered.push_back(r0 + shape[3]);
-        rendered.push_back(r0 + shape[2]);
+        complex<float> r0 = curve[N - 1];
+        complex<float> shape0[4];
+        for (unsigned i = 0; i < 4; i++)
+            shape0[i] = shape[i]*(1 - norm(r0));
+        rendered.push_back(r0 + shape0[0]);
+        rendered.push_back(r0 + shape0[1]);
+        rendered.push_back(r0 + shape0[3]);
+        rendered.push_back(r0 + shape0[2]);
 
-        // Repeat the first and last vertices so that two zero-area triangles
-        // are "drawn" from the previous line to this one.
+        // Stitching: Repeat the first and last vertices of every curve so that
+        // two zero-area triangles are "drawn" from the end of one curve to the
+        // beginning of the next.  Do this so that the entire foreground can be
+        // drawn in a single OpenGL draw call.
         rendered[first_stitch_i] = rendered[first_stitch_i + 1];
         rendered.push_back(rendered.back());
     }
