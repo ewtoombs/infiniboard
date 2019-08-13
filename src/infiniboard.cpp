@@ -52,6 +52,7 @@ void mouse_button_callback(GLFWwindow *window, int button,
 void mouse_draw_start(complex<float> p0, complex<float> p1);
 void mouse_draw(complex<float> p0, complex<float> p1, complex<float> p2);
 void mouse_draw_finish(void);
+void refresh_background(void);
 void refresh_foreground(void);
 void render(void);
 bool tasting(void);
@@ -62,6 +63,7 @@ GLFWwindow *g_window = NULL;
 
 unsigned g_background_len;
 GLuint g_background_vbo;
+unsigned g_p = 3, g_q = 7, g_res = 5, g_niter = 6;
 
 GLuint g_foreground_vbo;
 unsigned g_foreground_len = 0;
@@ -162,17 +164,9 @@ bool init_gl()
 {
     //---- Make the background VBO. ----
     glGenBuffers(1, &g_background_vbo);
+    refresh_background();
 
-    // Make the vertex data.
-    complex<float> *background_data;
-    poincare::tiling(3, 7, 5, 6, &background_data, &g_background_len);
-
-    // Upload the vertex data in background_data to the video device.
-    glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
-    glBufferData(GL_ARRAY_BUFFER, g_background_len*sizeof(complex<float>),
-            background_data, GL_STATIC_DRAW);
-
-
+    // Make the foreground VBO.
     glGenBuffers(1, &g_foreground_vbo);
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glBufferData(GL_ARRAY_BUFFER, g_foreground_max*sizeof(complex<float>),
@@ -244,9 +238,46 @@ void key_callback(GLFWwindow *window, int key, int scancode,
 {
     if (key == GLFW_KEY_Q && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+
     if (key == GLFW_KEY_U && action == GLFW_PRESS && g_curves.size() > 0) {
         g_curves.pop_back();
         refresh_foreground();
+    }
+
+    if (key == GLFW_KEY_A && action == GLFW_PRESS) {
+        g_p++;
+        refresh_background();
+    }
+    if (key == GLFW_KEY_S && action == GLFW_PRESS) {
+        g_q++;
+        refresh_background();
+    }
+    if (key == GLFW_KEY_D && action == GLFW_PRESS) {
+        g_res++;
+        refresh_background();
+    }
+    if (key == GLFW_KEY_F && action == GLFW_PRESS) {
+        g_niter++;
+        refresh_background();
+    }
+
+    if (key == GLFW_KEY_Z && action == GLFW_PRESS &&
+            2*((g_p - 1) + g_q) < (g_p - 1)*g_q) {
+        g_p--;
+        refresh_background();
+    }
+    if (key == GLFW_KEY_X && action == GLFW_PRESS &&
+            2*(g_p + (g_q - 1)) < g_p*(g_q - 1)) {
+        g_q--;
+        refresh_background();
+    }
+    if (key == GLFW_KEY_C && action == GLFW_PRESS && g_res > 2) {
+        g_res--;
+        refresh_background();
+    }
+    if (key == GLFW_KEY_V && action == GLFW_PRESS && g_niter > 0) {
+        g_niter--;
+        refresh_background();
     }
 }
 void cursor_position_callback(GLFWwindow *window, double sx, double sy)
@@ -372,6 +403,20 @@ void refresh_foreground(void)
     glBindBuffer(GL_ARRAY_BUFFER, g_foreground_vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0,
             rendered.size()*8, rendered.data());
+}
+
+void refresh_background(void)
+{
+    // Make the vertex data.
+    complex<float> *background_data;
+    poincare::tiling(g_p, g_q, g_res, g_niter,
+            &background_data, &g_background_len);
+
+    // Upload the vertex data in background_data to the video device.
+    glBindBuffer(GL_ARRAY_BUFFER, g_background_vbo);
+    glBufferData(GL_ARRAY_BUFFER, g_background_len*sizeof(complex<float>),
+            background_data, GL_DYNAMIC_DRAW);
+    free(background_data);
 }
 
 // Give the stew a taste every once in a while.
