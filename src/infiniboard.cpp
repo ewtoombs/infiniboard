@@ -83,6 +83,9 @@ int g_mouse_state = IDLE;
 vector<vector<complex<float>>> g_curves;
 
 complex<float> g_pan = 0.f;
+// The point in board space (in the reference configuration) where the mouse is
+// during the start of a pan operation.
+complex<float> g_pan_start = 0.f;
 
 unsigned char g_frame_counter = 0;
 
@@ -286,7 +289,11 @@ void cursor_position_callback(GLFWwindow *window, double sx, double sy)
     complex<float> p;
     switch (g_mouse_state) {
     case PAN:
-        g_pan = screen_to_board(s);
+    {
+        complex<float> p = g_pan_start, q = screen_to_board(s);
+        float mod2p = norm(p), mod2q = norm(q);
+        g_pan = ((1 - mod2p)*q - (1 - mod2q)*p) / (1 - mod2p*mod2q);
+    }
         break;
     case DRAW:
         p = screen_to_board(s);
@@ -304,7 +311,7 @@ void mouse_button_callback(GLFWwindow *window, int button,
     switch (g_mouse_state) {
     case IDLE:
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_MIDDLE) {
-            g_pan = screen_to_board(s);
+            g_pan_start = poincare::S(-g_pan, screen_to_board(s));
             g_mouse_state = PAN;
         }
         if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
