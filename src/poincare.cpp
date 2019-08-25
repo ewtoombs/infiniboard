@@ -38,8 +38,12 @@ void tiling_usual(unsigned p, unsigned q, unsigned res, unsigned niter,
     complex<float> D = exp(-1if*phi);
 
 
-    // pi, the primary edge.
-    complex<float> *ls = linspacecf(0, -c*exp(1if*theta/2.f), res);
+    // pi, the primary edge. Distribute the points with tanh, so that they
+    // remain well-distributed after group operations. I'm actually just
+    // distributing them evenly, really.
+    complex<float> *ls = linspacecf(0, atanh(c), res);
+    for (unsigned i = 0; i < res; i++)
+        ls[i] = -exp(1if*theta/2.f) * tanh(ls[i]);
 
     complex<float> *pi_A;
     unsigned npi;
@@ -187,7 +191,9 @@ void tiling_3q(unsigned q, unsigned res, unsigned niter,
 
 
     // pi, the primary edge.
-    complex<float> *ls = linspacecf(0, -c*exp(1if*theta/2.f), res);
+    complex<float> *ls = linspacecf(0, atanh(c), res);
+    for (unsigned i = 0; i < res; i++)
+        ls[i] = -exp(1if*theta/2.f) * tanh(ls[i]);
 
     complex<float> *pi;
     unsigned npi;
@@ -326,7 +332,9 @@ static void tiling_p3(unsigned p, unsigned res, unsigned niter,
 
 
     // pi, the primary edge.
-    complex<float> *ls = linspacecf(0, -c*exp(1if*theta/2.f), res);
+    complex<float> *ls = linspacecf(0, atanh(c), res);
+    for (unsigned i = 0; i < res; i++)
+        ls[i] = -exp(1if*theta/2.f) * tanh(ls[i]);
 
     complex<float> *pi;
     unsigned npi;
