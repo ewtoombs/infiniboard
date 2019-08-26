@@ -17,7 +17,8 @@ using namespace std;
 #define printe(x) cerr << x << '\n'
 
 #define DEF_ARRAY(type, a, size) \
-    type *a = (type *)malloc((size)*sizeof(type))
+    type *a = (type *)malloc((size)*sizeof(type)); \
+    assert(a != NULL)
 #define ASSN_ARRAY(type, size) \
     ((type *)malloc((size)*sizeof(type)))
 #define ZERO_ARRAY(a, n) memset((a), 0, (n)*sizeof(*(a)))
