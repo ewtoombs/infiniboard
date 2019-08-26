@@ -279,7 +279,7 @@ void key_callback(GLFWwindow *window, int key, int scancode,
         g_res--;
         refresh_background();
     }
-    if (key == GLFW_KEY_V && action == GLFW_PRESS && g_niter > 0) {
+    if (key == GLFW_KEY_V && action == GLFW_PRESS && g_niter > 1) {
         g_niter--;
         refresh_background();
     }

@@ -311,6 +311,11 @@ void tiling_3q(unsigned q, unsigned res, unsigned niter,
 static void tiling_p3(unsigned p, unsigned res, unsigned niter,
         complex<float> **py, unsigned *pny)
 {
+    // This specialisation doesn't work when niter == 0. It would complicate
+    // the building algorithm. See below. Why would you want that anyway? I'm
+    // going to explode now.
+    assert(niter != 0);
+
     // Some preliminary constants.
     unsigned q = 3;
     float theta = TAU/p;
@@ -367,6 +372,9 @@ static void tiling_p3(unsigned p, unsigned res, unsigned niter,
     COPY_ARRAY(pi, beta, npi);
     COPY_ARRAY(pi, zeta, npi);
     for (unsigned in = 0;; in++) {
+        // This is one place where niter can't equal zero. There aren't
+        // supposed to be delta or epsilon blocks at niter == 0.
+
         // delta block
         ndelta = npi + nbeta;
 
@@ -431,6 +439,10 @@ static void tiling_p3(unsigned p, unsigned res, unsigned niter,
     }
 
 
+    // This is the other place where niter can't equal zero. Two edges would be
+    // drawn per edge of the I block, a design inconsistent with the other (p,
+    // q) renderings and the other iteration numbers.
+
     // I block
     unsigned nalpha = 2*npi + (p - 4)*ndelta + nepsilon;
     unsigned nI = q*nalpha;
@@ -475,6 +487,12 @@ static void tiling_p3(unsigned p, unsigned res, unsigned niter,
     *py = I;
     *pny = nI;
 }
+
+// Generate a tiling of the Poincare disc. The tiling is comprised of regular
+// q-sided polygons. The polygons meet with p polygons at every vertex. The
+// output is a list of line segments, (*py[2*n], *py[2*n + 1]). *pny is the
+// number of elements in *py. The application is expected to free the returned
+// memory with a call to free().
 void tiling(unsigned p, unsigned q, unsigned res, unsigned niter,
         complex<float> **py, unsigned *pny)
 {
